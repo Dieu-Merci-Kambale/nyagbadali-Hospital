@@ -1,4 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import type { 
+  Patient, Personnel, Departement, Consultation, RendezVous, 
+  Prescription, Medicament, Facture, LigneFacture, Paiement, 
+  Hospitalisation, Lit, Chambre 
+} from '@/types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
