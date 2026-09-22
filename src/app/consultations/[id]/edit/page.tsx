@@ -59,7 +59,7 @@ export default function EditConsultationPage() {
       return;
     }
 
-    const formData = new FormData(e.currentTarget);
+
     
     const constantes = {
       poids: formData.get('poids') as string,
