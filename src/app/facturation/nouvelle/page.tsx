@@ -25,6 +25,7 @@ export default function NouvelleFacturePage() {
 
   // Lignes Facture State
   const [lignes, setLignes] = useState([{ id: Date.now().toString(), description: '', quantite: 1, prix_unitaire: 0 }]);
+  const [tauxAssurance, setTauxAssurance] = useState<number>(0);
 
   useEffect(() => {
     async function fetchPatients() {
@@ -67,6 +68,8 @@ export default function NouvelleFacturePage() {
   };
 
   const totalGlobal = lignes.reduce((acc, l) => acc + (l.quantite * l.prix_unitaire), 0);
+  const montantAssurance = Math.round((totalGlobal * tauxAssurance) / 100);
+  const montantPatient = totalGlobal - montantAssurance;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -98,10 +101,10 @@ export default function NouvelleFacturePage() {
       numero_facture: `FAC-${Date.now().toString().slice(-6)}`,
       patient_id: selectedPatientId,
       montant_total: totalGlobal,
-      montant_assurance: 0,
-      montant_patient: totalGlobal,
+      montant_assurance: montantAssurance,
+      montant_patient: montantPatient,
       tva: 0,
-      statut: 'en_attente', // Toujours en attente à la création
+      statut: montantPatient === 0 ? 'payée' : 'en_attente', // Si assurance 100%, alors payée
       date_facture: new Date().toISOString().split('T')[0],
     };
 
@@ -236,6 +239,21 @@ export default function NouvelleFacturePage() {
               )}
             </div>
 
+            <div className="form-group" style={{ marginTop: 24, maxWidth: 300 }}>
+              <label className="form-label">Taux de couverture Assurance (%)</label>
+              <input 
+                type="number" 
+                className="form-input" 
+                min="0" 
+                max="100" 
+                value={tauxAssurance}
+                onChange={(e) => setTauxAssurance(parseInt(e.target.value) || 0)}
+              />
+              <p style={{ fontSize: 12, color: 'var(--neutral-500)', marginTop: 4 }}>
+                0 = Aucune assurance (Patient paie tout). 100 = Prise en charge totale.
+              </p>
+            </div>
+
           </div>
         </div>
 
@@ -320,9 +338,15 @@ export default function NouvelleFacturePage() {
                   <span style={{ color: 'var(--neutral-600)' }}>TVA (0%)</span>
                   <span>0 FC</span>
                 </div>
+                {tauxAssurance > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: 14, color: 'var(--primary-600)' }}>
+                    <span>Prise en charge Assurance ({tauxAssurance}%)</span>
+                    <span>- {montantAssurance} FC</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px solid var(--neutral-200)', fontSize: 18, fontWeight: 700 }}>
-                  <span>Total Général</span>
-                  <span style={{ color: 'var(--primary-600)' }}>{totalGlobal} FC</span>
+                  <span>Montant Net (Patient)</span>
+                  <span style={{ color: 'var(--primary-600)' }}>{montantPatient} FC</span>
                 </div>
               </div>
             </div>

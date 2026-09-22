@@ -48,10 +48,13 @@ export default function EditFacturePage() {
     
     const formData = new FormData(e.currentTarget);
     const montantTotal = parseFloat(formData.get('montant_total') as string);
+    const montantAssurance = parseFloat(formData.get('montant_assurance') as string) || 0;
+    const montantPatient = montantTotal - montantAssurance;
+    
     const montantPaye = parseFloat(formData.get('montant_paye') as string) || 0;
     
     let statut = 'en_attente';
-    if (montantPaye >= montantTotal) {
+    if (montantPaye >= montantPatient) {
       statut = 'payée';
     } else if (montantPaye > 0) {
       statut = 'partielle';
@@ -67,7 +70,8 @@ export default function EditFacturePage() {
 
     const data = {
       montant_total: montantTotal,
-      montant_patient: montantTotal,
+      montant_assurance: montantAssurance,
+      montant_patient: montantPatient,
       statut,
     };
 
@@ -147,8 +151,12 @@ export default function EditFacturePage() {
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Montant Total (FC) *</label>
+                <label className="form-label">Montant Total Brut (FC) *</label>
                 <input type="number" name="montant_total" className="form-input" min="0" step="50" required defaultValue={facture.montant_total} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Prise en charge Assurance (FC)</label>
+                <input type="number" name="montant_assurance" className="form-input" min="0" step="50" defaultValue={facture.montant_assurance || 0} />
               </div>
               <div className="form-group">
                 <label className="form-label">Montant Payé (FC)</label>
@@ -165,8 +173,16 @@ export default function EditFacturePage() {
             
             <div style={{ padding: '16px', background: 'var(--neutral-50)', borderRadius: '8px', border: '1px solid var(--neutral-200)', marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ color: 'var(--neutral-600)' }}>Total à payer :</span>
+                <span style={{ color: 'var(--neutral-600)' }}>Total Brut :</span>
                 <span style={{ fontWeight: 600 }}>{facture.montant_total} FC</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: 'var(--neutral-600)' }}>Prise en charge :</span>
+                <span style={{ fontWeight: 600 }}>- {facture.montant_assurance || 0} FC</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, marginTop: 8, borderTop: '1px solid var(--neutral-200)', paddingTop: 8 }}>
+                <span style={{ color: 'var(--neutral-600)' }}>Net à payer (Patient) :</span>
+                <span style={{ fontWeight: 600 }}>{facture.montant_patient} FC</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <span style={{ color: 'var(--success)' }}>Déjà payé :</span>
@@ -174,8 +190,8 @@ export default function EditFacturePage() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--neutral-200)', paddingTop: 8, fontSize: 16, fontWeight: 700 }}>
                 <span>Reste à payer :</span>
-                <span style={{ color: facture.montant_total - (facture.montant_paye || 0) > 0 ? 'var(--danger)' : 'var(--neutral-800)' }}>
-                  {facture.montant_total - (facture.montant_paye || 0)} FC
+                <span style={{ color: facture.montant_patient - (facture.montant_paye || 0) > 0 ? 'var(--danger)' : 'var(--neutral-800)' }}>
+                  {facture.montant_patient - (facture.montant_paye || 0)} FC
                 </span>
               </div>
             </div>

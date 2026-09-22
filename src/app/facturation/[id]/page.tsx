@@ -40,7 +40,7 @@ export default function FactureDetailsPage() {
       // Calcul du total payé
       const totalPaye = data.paiements?.reduce((sum: number, p: any) => sum + p.montant, 0) || 0;
       setFacture({ ...data, totalPaye });
-      setMontantPaiement((data.montant_total - totalPaye).toString());
+      setMontantPaiement((data.montant_patient - totalPaye).toString());
     }
     setLoading(false);
   }
@@ -53,9 +53,9 @@ export default function FactureDetailsPage() {
       return;
     }
 
-    const reste = facture.montant_total - facture.totalPaye;
+    const reste = facture.montant_patient - facture.totalPaye;
     if (montant > reste) {
-      toast.error("Le montant saisi dépasse le reste à payer.");
+      toast.error("Le montant saisi dépasse le reste à payer par le patient.");
       return;
     }
 
@@ -86,7 +86,7 @@ export default function FactureDetailsPage() {
 
     // 2. Mettre à jour le statut de la facture
     const nouveauTotalPaye = facture.totalPaye + montant;
-    const nouveauStatut = nouveauTotalPaye >= facture.montant_total ? 'payée' : 'partielle';
+    const nouveauStatut = nouveauTotalPaye >= facture.montant_patient ? 'payée' : 'partielle';
 
     if (facture.statut !== nouveauStatut) {
       await supabase.from('factures').update({ statut: nouveauStatut }).eq('id', facture.id);
@@ -108,7 +108,7 @@ export default function FactureDetailsPage() {
       totalPaye: nouveauTotalPaye,
       paiements: [...(facture.paiements || []), nouveauPaiement]
     });
-    setMontantPaiement((facture.montant_total - nouveauTotalPaye).toString());
+    setMontantPaiement((facture.montant_patient - nouveauTotalPaye).toString());
     
     setSaving(false);
     router.refresh();
@@ -133,7 +133,7 @@ export default function FactureDetailsPage() {
     );
   }
 
-  const resteAPayer = facture.montant_total - facture.totalPaye;
+  const resteAPayer = facture.montant_patient - facture.totalPaye;
 
   return (
     <div className="animate-fade-in">
@@ -208,12 +208,14 @@ export default function FactureDetailsPage() {
                     <span style={{ fontWeight: 500 }}>{facture.montant_total} FC</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <span style={{ color: 'var(--neutral-600)' }}>Assurance / Remise</span>
-                    <span style={{ fontWeight: 500 }}>0 FC</span>
+                    <span style={{ color: 'var(--neutral-600)' }}>Prise en charge Assurance</span>
+                    <span style={{ fontWeight: 500, color: facture.montant_assurance > 0 ? 'var(--primary-600)' : 'var(--neutral-800)' }}>
+                      {facture.montant_assurance > 0 ? `- ${facture.montant_assurance}` : '0'} FC
+                    </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px solid var(--neutral-200)', fontSize: 18, fontWeight: 700 }}>
-                    <span>Montant Net</span>
-                    <span style={{ color: 'var(--primary-600)' }}>{facture.montant_total} FC</span>
+                    <span>Net à payer (Patient)</span>
+                    <span style={{ color: 'var(--primary-600)' }}>{facture.montant_patient} FC</span>
                   </div>
                 </div>
               </div>

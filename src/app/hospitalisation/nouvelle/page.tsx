@@ -96,31 +96,30 @@ export default function NouvelleAdmissionPage() {
       statut: 'actif'
     };
 
-    // Transaction simulée : Insérer hospitalisation, puis mettre à jour le lit
-    const { error: hospError } = await supabase.from('hospitalisations').insert([data]);
+    try {
+      // Transaction simulée : Insérer hospitalisation, puis mettre à jour le lit
+      const { error: hospError } = await supabase.from('hospitalisations').insert([data]);
 
-    if (hospError) {
-      console.error(hospError);
-      setErrorMsg(hospError.message);
+      if (hospError) {
+        throw hospError;
+      }
+
+      // Mise à jour du lit
+      const { error: litError } = await supabase
+        .from('lits')
+        .update({ statut: 'occupé' })
+        .eq('id', litId);
+
+      if (litError) {
+        throw new Error("Admission réussie mais échec de la mise à jour du lit: " + litError.message);
+      }
+
+      router.push('/hospitalisation');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Erreur inattendue');
       setSaving(false);
-      return;
     }
-
-    // Mise à jour du lit
-    const { error: litError } = await supabase
-      .from('lits')
-      .update({ statut: 'occupé' })
-      .eq('id', litId);
-
-    if (litError) {
-      console.error(litError);
-      // Attention: En prod, il faudrait faire un rollback si ceci échoue
-      setErrorMsg("Admission réussie mais échec de la mise à jour du lit.");
-      setSaving(false);
-      return;
-    }
-
-    router.push('/hospitalisation');
   };
 
   if (loading) {

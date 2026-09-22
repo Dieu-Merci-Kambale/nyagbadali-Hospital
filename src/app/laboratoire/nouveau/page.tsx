@@ -61,14 +61,18 @@ export default function NouvelleAnalysePage() {
       statut: 'demandé',
     };
 
-    const { error } = await supabase.from('analyses_laboratoire').insert([data]);
+    try {
+      const { error } = await supabase.from('analyses_laboratoire').insert([data]);
 
-    if (error) {
-      console.error(error);
-      setErrorMsg(error.message);
-      setSaving(false);
-    } else {
+      if (error) {
+        throw error;
+      }
+      
       router.push('/laboratoire');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setSaving(false);
     }
   };
 

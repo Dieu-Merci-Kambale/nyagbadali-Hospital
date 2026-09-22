@@ -94,7 +94,7 @@ export default function FacturationPage() {
   const revenuTotal = factures.filter(f => f.statut === 'payée' || f.statut === 'partielle').reduce((acc, f) => acc + (f.montant_paye || 0), 0);
   const enAttente = factures
     .filter(f => f.statut !== 'payée' && f.statut !== 'annulée')
-    .reduce((acc, f) => acc + (f.montant_total - (f.montant_paye || 0)), 0);
+    .reduce((acc, f) => acc + (f.montant_patient - (f.montant_paye || 0)), 0);
   
   if (loading) {
     return (
@@ -199,14 +199,17 @@ export default function FacturationPage() {
             <tbody>
               {filtered.map((facture: any, index: number) => {
                 const config = statutConfig[facture.statut] || statutConfig['en_attente'];
-                const reste = facture.montant_total - (facture.montant_paye || 0);
+                const reste = facture.montant_patient - (facture.montant_paye || 0);
                 return (
                   <tr key={facture.id} className="animate-slide-in-right" style={{ animationDelay: `${index * 0.03}s` }}>
                     <td>
                       <div style={{ fontWeight: 600 }}>{facture.patients?.prenom} {facture.patients?.nom}</div>
                       <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>{facture.patients?.code_patient}</div>
                     </td>
-                    <td style={{ fontWeight: 700 }}>{formatCDF(facture.montant_total)}</td>
+                    <td style={{ fontWeight: 700 }}>
+                      <div style={{ color: 'var(--neutral-900)' }}>{formatCDF(facture.montant_patient)}</div>
+                      {facture.montant_assurance > 0 && <div style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 400 }}>Assurance: {formatCDF(facture.montant_assurance)}</div>}
+                    </td>
                     <td style={{ color: 'var(--success)' }}>{formatCDF(facture.montant_paye || 0)}</td>
                     <td style={{ color: reste > 0 ? 'var(--danger)' : 'var(--neutral-400)' }}>{formatCDF(reste)}</td>
                     <td>{new Date(facture.date_facture).toLocaleDateString('fr-FR')}</td>

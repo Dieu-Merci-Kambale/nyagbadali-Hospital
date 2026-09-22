@@ -49,13 +49,17 @@ export default function NouvelleChambrePage() {
       departement_id: formData.get('departement_id') as string,
     };
 
-    const { data: result, error } = await supabase.from('chambres').insert([data]).select().single();
+    try {
+      const { data: result, error } = await supabase.from('chambres').insert([data]).select().single();
 
-    if (error) {
-      setErrorMsg(error.message);
-      setSaving(false);
-    } else {
+      if (error) {
+        throw error;
+      }
+      
       router.push(`/chambres/${result.id}/edit`);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setSaving(false);
     }
   };
 

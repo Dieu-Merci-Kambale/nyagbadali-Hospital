@@ -88,14 +88,18 @@ export default function NouveauRdvPage() {
       statut: 'planifié',
     };
 
-    const { error } = await supabase.from('rendez_vous').insert([data]);
+    try {
+      const { error } = await supabase.from('rendez_vous').insert([data]);
 
-    if (error) {
-      console.error(error);
-      setErrorMsg(error.message);
-      setSaving(false);
-    } else {
+      if (error) {
+        throw error;
+      }
+      
       router.push('/rendez-vous');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setSaving(false);
     }
   };
 

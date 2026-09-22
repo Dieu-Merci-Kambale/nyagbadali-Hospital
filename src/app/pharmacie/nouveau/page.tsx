@@ -55,14 +55,18 @@ export default function NouveauMedicamentPage() {
       statut
     };
 
-    const { error } = await supabase.from('medicaments').insert([data]);
+    try {
+      const { error } = await supabase.from('medicaments').insert([data]);
 
-    if (error) {
-      console.error(error);
-      setErrorMsg(error.message);
-      setSaving(false);
-    } else {
+      if (error) {
+        throw error;
+      }
+      
       router.push('/pharmacie');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setSaving(false);
     }
   };
 

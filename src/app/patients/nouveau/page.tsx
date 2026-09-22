@@ -28,32 +28,37 @@ export default function NouveauPatientPage() {
     setSaving(true);
     setErrorMsg('');
     
-    const formData = new FormData(e.currentTarget);
-    
-    const data = {
-      nom: formData.get('nom') as string,
-      prenom: formData.get('prenom') as string,
-      date_naissance: formData.get('date_naissance') as string,
-      sexe: formData.get('sexe') as 'M' | 'F',
-      groupe_sanguin: (formData.get('groupe_sanguin') as string) || null,
-      telephone: (formData.get('telephone') as string) || null,
-      email: (formData.get('email') as string) || null,
-      adresse: (formData.get('adresse') as string) || null,
-      assureur: (formData.get('assureur') as string) || null,
-      numero_assurance: (formData.get('numero_assurance') as string) || null,
-      contact_urgence_nom: (formData.get('contact_urgence_nom') as string) || null,
-      contact_urgence_tel: (formData.get('contact_urgence_tel') as string) || null,
-      statut: 'actif'
-    };
+    try {
+      const formData = new FormData(e.currentTarget);
+      
+      const data = {
+        code_patient: `PAT-${Date.now().toString().slice(-6)}`,
+        nom: formData.get('nom') as string,
+        prenom: formData.get('prenom') as string,
+        date_naissance: formData.get('date_naissance') as string,
+        sexe: formData.get('sexe') as 'M' | 'F',
+        groupe_sanguin: (formData.get('groupe_sanguin') as string) || null,
+        telephone: (formData.get('telephone') as string) || null,
+        email: (formData.get('email') as string) || null,
+        adresse: (formData.get('adresse') as string) || null,
+        assureur: (formData.get('assureur') as string) || null,
+        numero_assurance: (formData.get('numero_assurance') as string) || null,
+        contact_urgence_nom: (formData.get('contact_urgence_nom') as string) || null,
+        contact_urgence_tel: (formData.get('contact_urgence_tel') as string) || null,
+        statut: 'actif'
+      };
 
-    const { error } = await supabase.from('patients').insert([data]);
+      const { error } = await supabase.from('patients').insert([data]);
 
-    if (error) {
-      console.error('Error saving patient:', error);
-      setErrorMsg(error.message);
-      setSaving(false);
-    } else {
+      if (error) {
+        throw error;
+      }
+      
       router.push('/patients');
+    } catch (err: any) {
+      console.error('Error saving patient:', err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setSaving(false);
     }
   };
 

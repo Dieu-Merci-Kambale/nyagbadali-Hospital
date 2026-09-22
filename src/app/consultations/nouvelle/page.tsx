@@ -96,19 +96,21 @@ export default function NouvelleConsultationPage() {
       date_consultation: new Date().toISOString()
     };
 
-    const { error, data: inserted } = await supabase
-      .from('consultations')
-      .insert([data])
-      .select('id')
-      .single();
+    try {
+      const { error, data: inserted } = await supabase
+        .from('consultations')
+        .insert([data])
+        .select('id')
+        .single();
 
-    if (error) {
-      console.error(error);
-      toast.error(`Erreur d'enregistrement: ${error.message}`);
-      setSaving(false);
-    } else {
+      if (error) throw error;
+      
       toast.success("Consultation enregistrée avec succès !");
       router.push(`/consultations/${inserted.id}`);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Erreur d'enregistrement: ${err.message || 'Erreur inattendue'}`);
+      setSaving(false);
     }
   };
 
