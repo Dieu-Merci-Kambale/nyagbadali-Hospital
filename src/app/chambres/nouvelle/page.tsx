@@ -26,7 +26,7 @@ export default function NouvelleChambrePage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const form = e.currentTarget;
+    const formData = new FormData(e.currentTarget);
 
     const isConfirmed = await confirm({
       title: 'Créer la chambre',
@@ -39,7 +39,7 @@ export default function NouvelleChambrePage() {
 
     setSaving(true);
     setErrorMsg('');
-    const formData = new FormData(form);
+    setErrorMsg('');
 
     const data = {
       numero: formData.get('numero') as string,

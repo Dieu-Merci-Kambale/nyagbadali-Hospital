@@ -60,13 +60,14 @@ export default function NouvelleAdmissionPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
     
     if (!selectedPatientId) {
       setErrorMsg("Veuillez sélectionner un patient.");
       return;
     }
 
-    const formData = new FormData(e.currentTarget);
+
     const litId = formData.get('lit_id') as string;
 
     if (!litId) {

@@ -33,6 +33,7 @@ export default function NouvelleAnalysePage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
     setErrorMsg('');
     
     if (!profile) {
@@ -40,7 +41,7 @@ export default function NouvelleAnalysePage() {
       return;
     }
 
-    const formData = new FormData(e.currentTarget);
+
     
     const isConfirmed = await confirm({
       title: 'Enregistrer le résultat',

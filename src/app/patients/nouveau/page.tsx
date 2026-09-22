@@ -15,6 +15,7 @@ export default function NouveauPatientPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
     
     const isConfirmed = await confirm({
       title: 'Enregistrer le patient',
@@ -29,7 +30,6 @@ export default function NouveauPatientPage() {
     setErrorMsg('');
     
     try {
-      const formData = new FormData(e.currentTarget);
       
       const data = {
         code_patient: `PAT-${Date.now().toString().slice(-6)}`,

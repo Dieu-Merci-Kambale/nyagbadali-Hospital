@@ -53,6 +53,7 @@ export default function NouvelleConsultationPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
     
     if (!profile) {
       toast.error("Médecin non identifié. Veuillez vous reconnecter.");
@@ -76,7 +77,7 @@ export default function NouvelleConsultationPage() {
     setSaving(true);
     setErrorMsg('');
 
-    const formData = new FormData(e.currentTarget);
+
     
     // Construire le JSON des constantes
     const constantes = {

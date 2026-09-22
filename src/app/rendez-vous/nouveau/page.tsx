@@ -58,8 +58,7 @@ export default function NouveauRdvPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    const form = e.currentTarget;
+    const formData = new FormData(e.currentTarget);
 
     if (!selectedPatientId || !selectedMedecinId) {
       setErrorMsg("Veuillez sélectionner un patient et un médecin.");
@@ -78,7 +77,7 @@ export default function NouveauRdvPage() {
     setSaving(true);
     setErrorMsg('');
     
-    const formData = new FormData(form);
+
     
     const data = {
       patient_id: selectedPatientId,
