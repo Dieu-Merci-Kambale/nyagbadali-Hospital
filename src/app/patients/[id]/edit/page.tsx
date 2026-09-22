@@ -48,6 +48,7 @@ export default function EditPatientPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
     
     const isConfirmed = await confirm({
       title: 'Modifier le patient',
@@ -60,8 +61,7 @@ export default function EditPatientPage() {
 
     setSaving(true);
     setErrorMsg('');
-    
-    const formData = new FormData(e.currentTarget);
+    try {
     
     const data = {
       nom: formData.get('nom') as string,
@@ -85,13 +85,15 @@ export default function EditPatientPage() {
       .eq('id', id);
 
     if (error) {
-      console.error('Error updating patient:', error);
-      setErrorMsg(error.message);
+      throw error;
+    }
+    
+    router.push('/patients');
+    router.refresh();
+    } catch (err: any) {
+      console.error('Error updating patient:', err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
       setSaving(false);
-    } else {
-      // Redirection vers la liste
-      router.push('/patients');
-      router.refresh();
     }
   };
 

@@ -40,6 +40,7 @@ export default function EditConsultationPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
     
     const isConfirmed = await confirm({
       title: 'Modifier la consultation',
@@ -74,21 +75,24 @@ export default function EditConsultationPage() {
       statut: formData.get('statut') as string,
     };
 
-    const { error } = await supabase
-      .from('consultations')
-      .update(dataToUpdate)
-      .eq('id', id)
-      .select()
-      .single();
+    try {
+      const { error } = await supabase
+        .from('consultations')
+        .update(dataToUpdate)
+        .eq('id', id)
+        .select()
+        .single();
 
-    if (error) {
-      console.error(error);
-      toast.error(`Erreur de mise à jour: ${error.message}`);
-      setSaving(false);
-    } else {
+      if (error) {
+        throw error;
+      }
       toast.success("Consultation mise à jour avec succès !");
       router.refresh();
       router.push(`/consultations/${id}`);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Erreur de mise à jour: ${err.message}`);
+      setSaving(false);
     }
   };
 

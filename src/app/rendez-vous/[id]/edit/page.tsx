@@ -62,8 +62,7 @@ export default function EditRdvPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    const form = e.currentTarget;
+    const formData = new FormData(e.currentTarget);
 
     const isConfirmed = await confirm({
       title: 'Modifier le rendez-vous',
@@ -77,7 +76,7 @@ export default function EditRdvPage() {
     setSaving(true);
     setErrorMsg('');
     
-    const formData = new FormData(form);
+    try {
     
     const data = {
       medecin_id: formData.get('medecin_id') as string,
@@ -89,11 +88,14 @@ export default function EditRdvPage() {
     const { error } = await supabase.from('rendez_vous').update(data).eq('id', id);
 
     if (error) {
-      console.error(error);
-      setErrorMsg(error.message);
+      throw error;
+    }
+    
+    router.push('/rendez-vous');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
       setSaving(false);
-    } else {
-      router.push('/rendez-vous');
     }
   };
 

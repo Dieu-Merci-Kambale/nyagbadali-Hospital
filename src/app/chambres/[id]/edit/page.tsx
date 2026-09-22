@@ -73,13 +73,17 @@ export default function EditChambrePage({ params }: { params: Promise<{ id: stri
       departement_id: formData.get('departement_id') as string,
     };
 
-    const { error } = await supabase.from('chambres').update(data).eq('id', id);
+    try {
+      const { error } = await supabase.from('chambres').update(data).eq('id', id);
 
-    if (error) {
-      setErrorMsg(error.message);
-      setSaving(false);
-    } else {
+      if (error) {
+        throw error;
+      }
       router.push('/chambres');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setSaving(false);
     }
   };
 

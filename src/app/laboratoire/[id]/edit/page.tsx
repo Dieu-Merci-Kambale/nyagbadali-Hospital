@@ -91,14 +91,17 @@ export default function EditAnalysePage() {
       }
     }
 
-    const { error } = await supabase.from('analyses_laboratoire').update(data).eq('id', id);
+    try {
+      const { error } = await supabase.from('analyses_laboratoire').update(data).eq('id', id);
 
-    if (error) {
-      console.error(error);
-      setErrorMsg(error.message);
-      setSaving(false);
-    } else {
+      if (error) {
+        throw error;
+      }
       router.push('/laboratoire');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setSaving(false);
     }
   };
 

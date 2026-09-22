@@ -50,6 +50,7 @@ export default function EditPersonnelPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
 
     const isConfirmed = await confirm({
       title: 'Modifier le profil',
@@ -63,8 +64,7 @@ export default function EditPersonnelPage() {
     setSaving(true);
     setErrorMsg('');
     
-    const formData = new FormData(e.currentTarget);
-    
+    try {
     const data = {
       nom: formData.get('nom') as string,
       prenom: formData.get('prenom') as string,
@@ -78,11 +78,13 @@ export default function EditPersonnelPage() {
     const { error } = await supabase.from('personnel').update(data).eq('id', id);
 
     if (error) {
-      console.error(error);
-      setErrorMsg(error.message);
+      throw error;
+    }
+    router.push('/personnel');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
       setSaving(false);
-    } else {
-      router.push('/personnel');
     }
   };
 

@@ -88,14 +88,17 @@ export default function NouvellePrescriptionPage() {
       statut: 'active'
     };
 
-    const { error } = await supabase.from('prescriptions').insert([dataToInsert]);
+    try {
+      const { error } = await supabase.from('prescriptions').insert([dataToInsert]);
 
-    if (error) {
-      console.error(error);
-      setErrorMsg(error.message);
-      setSaving(false);
-    } else {
+      if (error) {
+        throw error;
+      }
       router.push(`/consultations/${consultation_id}`);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setSaving(false);
     }
   };
 

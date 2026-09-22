@@ -90,32 +90,35 @@ export default function EditHospitalisationPage() {
     }
 
     // 1. Mettre à jour l'hospitalisation
-    const { error: hospError } = await supabase
-      .from('hospitalisations')
-      .update(data)
-      .eq('id', id);
+    try {
+      const { error: hospError } = await supabase
+        .from('hospitalisations')
+        .update(data)
+        .eq('id', id);
 
-    if (hospError) {
-      console.error(hospError);
-      setErrorMsg(hospError.message);
-      setSaving(false);
-      return;
-    }
-
-    // 2. Si sortie, libérer le lit
-    if (isSortie && hosp.statut === 'actif' && hosp.lit_id) {
-      const { error: litError } = await supabase
-        .from('lits')
-        .update({ statut: 'disponible' })
-        .eq('id', hosp.lit_id);
-        
-      if (litError) {
-        console.error("Erreur lors de la libération du lit", litError);
-        // On ne bloque pas pour ça, mais en prod on loggerait ça
+      if (hospError) {
+        throw hospError;
       }
-    }
 
-    router.push('/hospitalisation');
+      // 2. Si sortie, libérer le lit
+      if (isSortie && hosp.statut === 'actif' && hosp.lit_id) {
+        const { error: litError } = await supabase
+          .from('lits')
+          .update({ statut: 'disponible' })
+          .eq('id', hosp.lit_id);
+          
+        if (litError) {
+          console.error("Erreur lors de la libération du lit", litError);
+          // On ne bloque pas pour ça, mais en prod on loggerait ça
+        }
+      }
+
+      router.push('/hospitalisation');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setSaving(false);
+    }
   };
 
   if (loading) {

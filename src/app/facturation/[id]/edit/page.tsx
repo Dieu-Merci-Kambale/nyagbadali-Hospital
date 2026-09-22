@@ -75,30 +75,33 @@ export default function EditFacturePage() {
       statut,
     };
 
-    // 1. Update Facture
-    const { error } = await supabase.from('factures').update(data).eq('id', id);
+    try {
+      // 1. Update Facture
+      const { error } = await supabase.from('factures').update(data).eq('id', id);
 
-    if (error) {
-      console.error(error);
-      setErrorMsg(error.message);
+      if (error) {
+        throw error;
+      }
+
+      // 2. Update Description in lignes_facture
+      if (facture.ligne_id) {
+        await supabase.from('lignes_facture').update({ description, montant: montantTotal, prix_unitaire: montantTotal }).eq('id', facture.ligne_id);
+      } else {
+        await supabase.from('lignes_facture').insert([{ facture_id: id, description, quantite: 1, prix_unitaire: montantTotal, montant: montantTotal, couvert_assurance: false }]);
+      }
+
+      // 3. Add new paiement if montant_paye increased
+      const diff = montantPaye - facture.montant_paye;
+      if (diff > 0) {
+        await supabase.from('paiements').insert([{ facture_id: id, montant: diff, mode_paiement: 'cash', date_paiement: new Date().toISOString() }]);
+      }
+
+      router.push('/facturation');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
       setSaving(false);
-      return;
     }
-
-    // 2. Update Description in lignes_facture
-    if (facture.ligne_id) {
-      await supabase.from('lignes_facture').update({ description, montant: montantTotal, prix_unitaire: montantTotal }).eq('id', facture.ligne_id);
-    } else {
-      await supabase.from('lignes_facture').insert([{ facture_id: id, description, quantite: 1, prix_unitaire: montantTotal, montant: montantTotal, couvert_assurance: false }]);
-    }
-
-    // 3. Add new paiement if montant_paye increased
-    const diff = montantPaye - facture.montant_paye;
-    if (diff > 0) {
-      await supabase.from('paiements').insert([{ facture_id: id, montant: diff, mode_paiement: 'cash', date_paiement: new Date().toISOString() }]);
-    }
-
-    router.push('/facturation');
   };
 
   if (loading) {
