@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Stethoscope,
   Clock,
@@ -14,6 +16,7 @@ import {
 import { supabase } from '@/lib/supabase';
 
 export default function ConsultationsPage() {
+  const router = useRouter();
   const [consultations, setConsultations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'en_cours' | 'terminée' | 'toutes'>('toutes');
@@ -56,7 +59,7 @@ export default function ConsultationsPage() {
           <h1 className="page-title">Consultations</h1>
           <p className="page-subtitle">Dossiers médicaux et consultations</p>
         </div>
-        <button className="btn btn-primary">
+        <button type="button" className="btn btn-primary" onClick={() => router.push('/consultations/nouvelle')}>
           <Plus size={16} /> Nouvelle Consultation
         </button>
       </div>
@@ -114,7 +117,9 @@ export default function ConsultationsPage() {
                     <span className={`badge ${consultation.statut === 'en_cours' ? 'badge-warning' : 'badge-success'}`}>
                       {consultation.statut === 'en_cours' ? '🔄 En cours' : '✅ Terminée'}
                     </span>
-                    <button className="btn btn-outline btn-sm"><Eye size={14} /> Voir</button>
+                    <Link href={`/consultations/${consultation.id}`} className="btn btn-outline btn-sm">
+                      <Eye size={14} /> Voir
+                    </Link>
                   </div>
                 </div>
 

@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Stethoscope, User, Calendar, FileText, Printer, Loader2, AlertCircle, Edit } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { buildConsultationDocumentPdf } from '@/lib/document-models';
 
 export default function ConsultationDetailsPage() {
   const { id } = useParams();
@@ -67,10 +69,34 @@ export default function ConsultationDetailsPage() {
     );
   }
 
+  const handleDownloadPdf = async () => {
+    const pdf = await buildConsultationDocumentPdf({
+      consultation,
+      prescriptions,
+    });
+    pdf.save(`consultation-${consultation.patients?.code_patient || consultation.id}.pdf`);
+  };
+
   return (
-    <div className="animate-fade-in">
+    <div id="consultation-pdf-export" className="animate-fade-in print-document">
+      <div className="print-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 60, height: 60, borderRadius: 16, overflow: 'hidden', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(15, 23, 42, 0.08)' }}>
+            <Image src="/logo.png" alt="Logo Nyagbadali" width={52} height={52} unoptimized style={{ objectFit: 'cover' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', color: '#0f172a' }}>Nyagbadali</div>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#64748b' }}>Système de gestion hospitalière</div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', color: '#475569' }}>
+          <div style={{ fontWeight: 700 }}>Fiche de consultation</div>
+          <div style={{ fontSize: 12 }}>{new Date(consultation.date_consultation).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header hide-on-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           <button className="btn btn-ghost" onClick={() => router.back()} style={{ padding: 8, borderRadius: '50%' }}>
             <ArrowLeft size={18} />
@@ -86,8 +112,8 @@ export default function ConsultationDetailsPage() {
           <Link href={`/consultations/${consultation.id}/edit`} className="btn btn-primary">
             <Edit size={16} /> {consultation.statut === 'en_cours' ? 'Terminer / Modifier' : 'Modifier'}
           </Link>
-          <button className="btn btn-outline" onClick={() => window.print()}>
-            <Printer size={16} /> Imprimer
+          <button className="btn btn-outline" onClick={handleDownloadPdf}>
+            <Printer size={16} /> Télécharger PDF
           </button>
         </div>
       </div>

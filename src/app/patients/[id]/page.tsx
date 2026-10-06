@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -17,9 +18,11 @@ import {
   CreditCard,
   Edit,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Printer
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { buildPatientDocumentPdf } from '@/lib/document-models';
 import type { Patient } from '@/types';
 
 function getAge(dateNaissance: string): number {
@@ -107,40 +110,69 @@ export default function PatientDossierPage() {
     );
   }
 
+  const handleDownloadPdf = async () => {
+    const pdf = await buildPatientDocumentPdf({
+      patient,
+      consultations,
+      factures,
+    });
+    pdf.save(`dossier-patient-${patient.code_patient || patient.id}.pdf`);
+  };
+
   return (
-    <div className="animate-fade-in">
+    <div id="patient-pdf-export" className="animate-fade-in print-document">
+      <div className="print-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 60, height: 60, borderRadius: 16, overflow: 'hidden', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(15, 23, 42, 0.08)' }}>
+            <Image src="/logo.png" alt="Logo Nyagbadali" width={52} height={52} unoptimized style={{ objectFit: 'cover' }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', color: '#0f172a' }}>Nyagbadali</div>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#64748b' }}>Dossier patient</div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', color: '#475569' }}>
+          <div style={{ fontWeight: 700 }}>{patient.code_patient}</div>
+          <div style={{ fontSize: 12 }}>{new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          <button className="btn btn-outline" onClick={() => router.push('/patients')} style={{ padding: 8, borderRadius: '50%' }}>
+      <div className="patient-hero hide-on-print">
+        <div className="patient-hero-main">
+          <button className="btn btn-outline btn-icon" onClick={() => router.push('/patients')} title="Retour à la liste">
             <ArrowLeft size={18} />
           </button>
-          
-          <div className="avatar avatar-xl avatar-blue">
+
+          <div className="avatar avatar-xl avatar-blue patient-avatar">
             {patient.prenom[0]}{patient.nom[0]}
           </div>
-          
-          <div>
-            <h1 className="page-title" style={{ marginBottom: 4 }}>{patient.prenom} {patient.nom}</h1>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13, color: 'var(--neutral-500)' }}>
-              <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--primary-600)' }}>{patient.code_patient}</span>
-              <span>&bull;</span>
-              <span>{patient.sexe === 'M' ? 'Homme' : 'Femme'}, {getAge(patient.date_naissance)} ans</span>
-              <span>&bull;</span>
-              <span className={`badge ${patient.statut === 'actif' ? 'badge-success' : 'badge-neutral'}`}>
+
+          <div className="patient-hero-copy">
+            <div className="patient-name-row">
+              <h1 className="page-title" style={{ marginBottom: 0 }}>{patient.prenom} {patient.nom}</h1>
+              <span className={`badge patient-status ${patient.statut === 'actif' ? 'badge-success' : 'badge-neutral'}`}>
                 {patient.statut}
               </span>
+            </div>
+            <div className="patient-meta-row">
+              <span className="patient-code">{patient.code_patient}</span>
+              <span className="patient-dot">•</span>
+              <span>{patient.sexe === 'M' ? 'Homme' : 'Femme'}, {getAge(patient.date_naissance)} ans</span>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="patient-actions">
           <Link href={`/consultations/nouvelle?patient_id=${patient.id}`} className="btn btn-primary">
             <Stethoscope size={16} /> Nouvelle Consultation
           </Link>
           <Link href={`/facturation/nouvelle?patient_id=${patient.id}`} className="btn btn-outline">
             <CreditCard size={16} /> Facturer
           </Link>
+          <button type="button" className="btn btn-outline" onClick={handleDownloadPdf}>
+            <Printer size={16} /> Télécharger PDF
+          </button>
           <Link href={`/patients/${patient.id}/edit`} className="btn btn-ghost" title="Modifier le dossier">
             <Edit size={18} />
           </Link>
@@ -162,43 +194,37 @@ export default function PatientDossierPage() {
 
       {/* TAB: Aperçu */}
       {activeTab === 'apercu' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24 }}>
+        <div className="patient-layout-grid">
           {/* Sidebar Profil */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div className="card">
+            <div className="card patient-summary-card">
               <div className="card-header"><span className="card-title">Informations de contact</span></div>
-              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--neutral-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--neutral-500)' }}>
-                    <Phone size={16} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Téléphone</div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{patient.telephone || 'Non renseigné'}</div>
+              <div className="card-body info-list">
+                <div className="info-row">
+                  <div className="info-icon"><Phone size={16} /></div>
+                  <div className="info-copy">
+                    <div className="info-label">Téléphone</div>
+                    <div className="info-value">{patient.telephone || 'Non renseigné'}</div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--neutral-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--neutral-500)' }}>
-                    <Mail size={16} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Email</div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{patient.email || 'Non renseigné'}</div>
+                <div className="info-row">
+                  <div className="info-icon"><Mail size={16} /></div>
+                  <div className="info-copy">
+                    <div className="info-label">Email</div>
+                    <div className="info-value">{patient.email || 'Non renseigné'}</div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--neutral-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--neutral-500)' }}>
-                    <MapPin size={16} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Adresse</div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{patient.adresse || 'Non renseignée'}</div>
+                <div className="info-row">
+                  <div className="info-icon"><MapPin size={16} /></div>
+                  <div className="info-copy">
+                    <div className="info-label">Adresse</div>
+                    <div className="info-value">{patient.adresse || 'Non renseignée'}</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="card">
+            <div className="card patient-summary-card">
               <div className="card-header"><span className="card-title">Détails médicaux</span></div>
               <div className="card-body">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

@@ -16,12 +16,10 @@ import {
   FlaskConical,
   Receipt,
   BedDouble,
-  Ambulance,
-  Package,
-  BarChart3,
-  Settings,
   Heart,
   LogOut,
+  PanelLeftClose,
+  PanelRightOpen,
 } from 'lucide-react';
 
 // =====================================================
@@ -37,28 +35,25 @@ interface NavItemConfig {
 }
 
 const allNavItems: NavItemConfig[] = [
-  // Principal
   { module: 'dashboard', label: 'Tableau de bord', href: '/', icon: <LayoutDashboard size={20} />, section: 'Principal' },
   { module: 'patients', label: 'Patients', href: '/patients', icon: <Users size={20} />, section: 'Principal' },
   { module: 'rendez-vous', label: 'Rendez-vous', href: '/rendez-vous', icon: <CalendarDays size={20} />, section: 'Principal' },
-  // Clinique
   { module: 'consultations', label: 'Consultations', href: '/consultations', icon: <Stethoscope size={20} />, section: 'Clinique' },
   { module: 'hospitalisation', label: 'Hospitalisation', href: '/hospitalisation', icon: <BedDouble size={20} />, section: 'Clinique' },
-  { module: 'urgences', label: 'Urgences', href: '/urgences', icon: <Ambulance size={20} />, section: 'Clinique' },
   { module: 'chambres', label: 'Chambres & Lits', href: '/chambres', icon: <BedDouble size={20} />, section: 'Clinique' },
-  // Support Médical
   { module: 'pharmacie', label: 'Pharmacie', href: '/pharmacie', icon: <Pill size={20} />, section: 'Support Médical' },
   { module: 'laboratoire', label: 'Laboratoire', href: '/laboratoire', icon: <FlaskConical size={20} />, section: 'Support Médical' },
-  // Administration
   { module: 'personnel', label: 'Personnel', href: '/personnel', icon: <UserCog size={20} />, section: 'Administration' },
   { module: 'facturation', label: 'Facturation', href: '/facturation', icon: <Receipt size={20} />, section: 'Administration' },
-  { module: 'inventaire', label: 'Inventaire', href: '/inventaire', icon: <Package size={20} />, section: 'Administration' },
-  { module: 'rapports', label: 'Rapports', href: '/rapports', icon: <BarChart3 size={20} />, section: 'Administration' },
-  // Système
-  { module: 'parametres', label: 'Paramètres', href: '/parametres', icon: <Settings size={20} />, section: 'Système' },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const pathname = usePathname();
   const { profile, logout } = useAuth();
 
@@ -87,9 +82,19 @@ export default function Sidebar() {
   const namePrefix = profile?.role.startsWith('medecin') ? 'Dr. ' : '';
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* Logo */}
       <div className="sidebar-logo">
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={onToggle}
+          aria-label={collapsed ? 'Ouvrir la navigation' : 'Réduire la navigation'}
+          title={collapsed ? 'Ouvrir la navigation' : 'Réduire la navigation'}
+        >
+          {collapsed ? <PanelRightOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
+
         <div className="sidebar-logo-icon" style={{ background: 'transparent', overflow: 'hidden' }}>
           <Image src="/logo.png" alt="Logo Nyagbadali" width={200} height={200} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.3)' }} unoptimized />
         </div>
@@ -113,9 +118,10 @@ export default function Sidebar() {
                   key={item.href}
                   href={item.href}
                   className={`sidebar-link ${isActive ? 'active' : ''}`}
+                  title={collapsed ? item.label : undefined}
                 >
                   <span className="sidebar-link-icon">{item.icon}</span>
-                  <span>{item.label}</span>
+                  <span className="sidebar-link-label">{item.label}</span>
                 </Link>
               );
             })}
@@ -133,26 +139,7 @@ export default function Sidebar() {
         <button
           onClick={logout}
           title="Se déconnecter"
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'rgba(255,255,255,0.4)',
-            cursor: 'pointer',
-            padding: 6,
-            borderRadius: 8,
-            transition: 'all 0.2s',
-            marginLeft: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color = '#ef4444';
-            (e.currentTarget as HTMLElement).style.background = 'rgba(239, 68, 68, 0.15)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)';
-            (e.currentTarget as HTMLElement).style.background = 'none';
-          }}
+          className="sidebar-logout-btn"
           id="btn-logout"
         >
           <LogOut size={18} />

@@ -20,7 +20,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 function formatCDF(montant: number): string {
-  return new Intl.NumberFormat('fr-CD', { style: 'decimal', maximumFractionDigits: 0 }).format(montant) + ' FC';
+  return new Intl.NumberFormat('fr-FR', { useGrouping: true, maximumFractionDigits: 0 }).format(montant) + ' FC';
 }
 
 const statutConfig: Record<string, { label: string; class: string; icon: React.ReactNode }> = {

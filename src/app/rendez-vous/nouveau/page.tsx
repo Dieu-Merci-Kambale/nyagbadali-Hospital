@@ -9,13 +9,13 @@ import { useConfirm } from '@/context/ConfirmContext';
 export default function NouveauRdvPage() {
   const router = useRouter();
   const { confirm } = useConfirm();
-  
-  const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  
   const [patients, setPatients] = useState<any[]>([]);
   const [medecins, setMedecins] = useState<any[]>([]);
+  const [patientLoading, setPatientLoading] = useState(false);
+  const [medecinLoading, setMedecinLoading] = useState(false);
 
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [searchPatient, setSearchPatient] = useState('');
@@ -23,45 +23,60 @@ export default function NouveauRdvPage() {
   const [searchMedecin, setSearchMedecin] = useState('');
 
   useEffect(() => {
-    async function fetchData() {
-      // Fetch Patients
-      const { data: pData } = await supabase
+    let ignore = false;
+
+    async function fetchPatients() {
+      if (searchPatient.trim().length < 2) {
+        if (!ignore) setPatients([]);
+        return;
+      }
+
+      if (!ignore) setPatientLoading(true);
+      const { data } = await supabase
         .from('patients')
         .select('id, nom, prenom, code_patient')
+        .or(`nom.ilike.%${searchPatient.trim()}%,prenom.ilike.%${searchPatient.trim()}%,code_patient.ilike.%${searchPatient.trim()}%`)
+        .limit(8)
         .order('nom');
-      if (pData) setPatients(pData);
 
-      // Fetch Medecins
-      const { data: mData } = await supabase
+      if (!ignore) {
+        setPatients(data || []);
+        setPatientLoading(false);
+      }
+    }
+
+    async function fetchMedecins() {
+      if (searchMedecin.trim().length < 2) {
+        if (!ignore) setMedecins([]);
+        return;
+      }
+
+      if (!ignore) setMedecinLoading(true);
+      const { data } = await supabase
         .from('personnel')
         .select('id, nom, prenom, specialite')
         .like('role', '%medecin%')
+        .or(`nom.ilike.%${searchMedecin.trim()}%,prenom.ilike.%${searchMedecin.trim()}%,specialite.ilike.%${searchMedecin.trim()}%`)
+        .limit(8)
         .order('nom');
-      if (mData) setMedecins(mData);
 
-      setLoading(false);
+      if (!ignore) {
+        setMedecins(data || []);
+        setMedecinLoading(false);
+      }
     }
-    fetchData();
-  }, []);
 
-  const filteredPatients = patients.filter(p => 
-    searchPatient === '' || 
-    `${p.prenom} ${p.nom}`.toLowerCase().includes(searchPatient.toLowerCase()) ||
-    (p.code_patient && p.code_patient.toLowerCase().includes(searchPatient.toLowerCase()))
-  ).slice(0, 5);
-
-  const filteredMedecins = medecins.filter(m => 
-    searchMedecin === '' || 
-    `${m.prenom} ${m.nom}`.toLowerCase().includes(searchMedecin.toLowerCase()) ||
-    (m.specialite && m.specialite.toLowerCase().includes(searchMedecin.toLowerCase()))
-  ).slice(0, 5);
+    fetchPatients();
+    fetchMedecins();
+    return () => { ignore = true; };
+  }, [searchPatient, searchMedecin]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
     if (!selectedPatientId || !selectedMedecinId) {
-      setErrorMsg("Veuillez sélectionner un patient et un médecin.");
+      setErrorMsg('Veuillez sélectionner un patient et un médecin.');
       return;
     }
 
@@ -69,16 +84,14 @@ export default function NouveauRdvPage() {
       title: 'Planifier le rendez-vous',
       message: 'Voulez-vous vraiment programmer ce rendez-vous ?',
       confirmText: 'Oui, programmer',
-      type: 'info'
+      type: 'info',
     });
 
     if (!isConfirmed) return;
 
     setSaving(true);
     setErrorMsg('');
-    
 
-    
     const data = {
       patient_id: selectedPatientId,
       medecin_id: selectedMedecinId,
@@ -90,10 +103,8 @@ export default function NouveauRdvPage() {
     try {
       const { error } = await supabase.from('rendez_vous').insert([data]);
 
-      if (error) {
-        throw error;
-      }
-      
+      if (error) throw error;
+
       router.push('/rendez-vous');
     } catch (err: any) {
       console.error(err);
@@ -101,14 +112,6 @@ export default function NouveauRdvPage() {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Loader2 size={24} className="animate-spin text-primary-500" />
-      </div>
-    );
-  }
 
   return (
     <div className="animate-fade-in">
@@ -139,9 +142,9 @@ export default function NouveauRdvPage() {
                 <div>
                   <div className="header-search" style={{ marginBottom: 8, background: 'var(--neutral-50)' }}>
                     <Search className="header-search-icon" size={16} />
-                    <input 
-                      type="text" 
-                      placeholder="Rechercher par nom ou code patient..." 
+                    <input
+                      type="text"
+                      placeholder="Rechercher par nom ou code patient..."
                       value={searchPatient}
                       onChange={(e) => setSearchPatient(e.target.value)}
                       style={{ fontSize: 14 }}
@@ -149,20 +152,23 @@ export default function NouveauRdvPage() {
                   </div>
                   {searchPatient && (
                     <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 8, overflow: 'hidden' }}>
-                      {filteredPatients.map(p => (
-                        <div 
-                          key={p.id} 
-                          style={{ padding: '8px 12px', borderBottom: '1px solid var(--neutral-100)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                          onClick={() => { setSelectedPatientId(p.id); setSearchPatient(''); }}
-                        >
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{p.prenom} {p.nom}</div>
-                            <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>{p.code_patient}</div>
+                      {patientLoading ? (
+                        <div style={{ padding: 12, textAlign: 'center', color: 'var(--neutral-500)' }}>Recherche en cours...</div>
+                      ) : patients.length > 0 ? (
+                        patients.map((p) => (
+                          <div
+                            key={p.id}
+                            style={{ padding: '8px 12px', borderBottom: '1px solid var(--neutral-100)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                            onClick={() => { setSelectedPatientId(p.id); setSearchPatient(''); }}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{p.prenom} {p.nom}</div>
+                              <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>{p.code_patient}</div>
+                            </div>
+                            <button type="button" className="btn btn-sm btn-outline">Sélectionner</button>
                           </div>
-                          <button type="button" className="btn btn-sm btn-outline">Sélectionner</button>
-                        </div>
-                      ))}
-                      {filteredPatients.length === 0 && (
+                        ))
+                      ) : (
                         <div style={{ padding: 12, textAlign: 'center', color: 'var(--neutral-500)', fontSize: 13 }}>Aucun patient trouvé</div>
                       )}
                     </div>
@@ -172,10 +178,10 @@ export default function NouveauRdvPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--primary-50)', border: '1px solid var(--primary-200)', borderRadius: 8 }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--neutral-900)' }}>
-                      {patients.find(p => p.id === selectedPatientId)?.prenom} {patients.find(p => p.id === selectedPatientId)?.nom}
+                      {patients.find((p) => p.id === selectedPatientId)?.prenom} {patients.find((p) => p.id === selectedPatientId)?.nom}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--neutral-600)' }}>
-                      {patients.find(p => p.id === selectedPatientId)?.code_patient}
+                      {patients.find((p) => p.id === selectedPatientId)?.code_patient}
                     </div>
                   </div>
                   <button type="button" onClick={() => setSelectedPatientId('')} className="btn btn-sm btn-ghost text-danger-600">
@@ -191,9 +197,9 @@ export default function NouveauRdvPage() {
                 <div>
                   <div className="header-search" style={{ marginBottom: 8, background: 'var(--neutral-50)' }}>
                     <Search className="header-search-icon" size={16} />
-                    <input 
-                      type="text" 
-                      placeholder="Rechercher par nom ou spécialité..." 
+                    <input
+                      type="text"
+                      placeholder="Rechercher par nom ou spécialité..."
                       value={searchMedecin}
                       onChange={(e) => setSearchMedecin(e.target.value)}
                       style={{ fontSize: 14 }}
@@ -201,20 +207,23 @@ export default function NouveauRdvPage() {
                   </div>
                   {searchMedecin && (
                     <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 8, overflow: 'hidden' }}>
-                      {filteredMedecins.map(m => (
-                        <div 
-                          key={m.id} 
-                          style={{ padding: '8px 12px', borderBottom: '1px solid var(--neutral-100)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                          onClick={() => { setSelectedMedecinId(m.id); setSearchMedecin(''); }}
-                        >
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>Dr. {m.prenom} {m.nom}</div>
-                            <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>{m.specialite}</div>
+                      {medecinLoading ? (
+                        <div style={{ padding: 12, textAlign: 'center', color: 'var(--neutral-500)' }}>Recherche en cours...</div>
+                      ) : medecins.length > 0 ? (
+                        medecins.map((m) => (
+                          <div
+                            key={m.id}
+                            style={{ padding: '8px 12px', borderBottom: '1px solid var(--neutral-100)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                            onClick={() => { setSelectedMedecinId(m.id); setSearchMedecin(''); }}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>Dr. {m.prenom} {m.nom}</div>
+                              <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>{m.specialite}</div>
+                            </div>
+                            <button type="button" className="btn btn-sm btn-outline">Sélectionner</button>
                           </div>
-                          <button type="button" className="btn btn-sm btn-outline">Sélectionner</button>
-                        </div>
-                      ))}
-                      {filteredMedecins.length === 0 && (
+                        ))
+                      ) : (
                         <div style={{ padding: 12, textAlign: 'center', color: 'var(--neutral-500)', fontSize: 13 }}>Aucun médecin trouvé</div>
                       )}
                     </div>
@@ -224,10 +233,10 @@ export default function NouveauRdvPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--primary-50)', border: '1px solid var(--primary-200)', borderRadius: 8 }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--neutral-900)' }}>
-                      Dr. {medecins.find(m => m.id === selectedMedecinId)?.prenom} {medecins.find(m => m.id === selectedMedecinId)?.nom}
+                      Dr. {medecins.find((m) => m.id === selectedMedecinId)?.prenom} {medecins.find((m) => m.id === selectedMedecinId)?.nom}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--neutral-600)' }}>
-                      {medecins.find(m => m.id === selectedMedecinId)?.specialite}
+                      {medecins.find((m) => m.id === selectedMedecinId)?.specialite}
                     </div>
                   </div>
                   <button type="button" onClick={() => setSelectedMedecinId('')} className="btn btn-sm btn-ghost text-danger-600">

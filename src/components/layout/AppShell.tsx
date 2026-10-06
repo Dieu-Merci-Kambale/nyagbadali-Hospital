@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
@@ -9,6 +10,7 @@ import { Loader2, Heart } from 'lucide-react';
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
   const pathname = usePathname();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const isLoginPage = pathname === '/login';
 
@@ -57,11 +59,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Authentifié → layout complet avec sidebar + header
   return (
     <div className="app-layout">
-      <Sidebar />
-      <div className="main-content">
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((value) => !value)}
+      />
+      <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         <Header />
         <main className="page-content">
-          {children}
+          <div className="page-surface">
+            {children}
+          </div>
         </main>
       </div>
     </div>

@@ -11,64 +11,81 @@ export default function NouvelleAnalysePage() {
   const router = useRouter();
   const { profile } = useAuth();
   const { confirm } = useConfirm();
-  
-  const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
+  const [searchingPatients, setSearchingPatients] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  
+
   const [patients, setPatients] = useState<any[]>([]);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [selectedPatientId, setSelectedPatientId] = useState('');
 
   useEffect(() => {
+    let ignore = false;
+
     async function fetchPatients() {
+      if (patientSearch.trim().length < 2) {
+        if (!ignore) setPatients([]);
+        return;
+      }
+
+      if (!ignore) setSearchingPatients(true);
       const { data } = await supabase
         .from('patients')
         .select('id, nom, prenom, code_patient')
+        .or(`nom.ilike.%${patientSearch.trim()}%,prenom.ilike.%${patientSearch.trim()}%,code_patient.ilike.%${patientSearch.trim()}%`)
+        .limit(8)
         .order('nom');
-      
-      if (data) setPatients(data);
-      setLoading(false);
+
+      if (!ignore) {
+        setPatients(data || []);
+        setSearchingPatients(false);
+      }
     }
+
     fetchPatients();
-  }, []);
+    return () => { ignore = true; };
+  }, [patientSearch]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     setErrorMsg('');
-    
+
     if (!profile) {
-      setErrorMsg("Erreur: Utilisateur non identifié.");
+      setErrorMsg('Erreur: Utilisateur non identifié.');
       return;
     }
 
+    if (!selectedPatientId) {
+      setErrorMsg('Veuillez sélectionner un patient.');
+      return;
+    }
 
-    
     const isConfirmed = await confirm({
       title: 'Enregistrer le résultat',
       message: 'Voulez-vous vraiment enregistrer ce résultat de laboratoire ?',
       confirmText: 'Oui, enregistrer',
-      type: 'info'
+      type: 'info',
     });
 
     if (!isConfirmed) return;
 
     setSaving(true);
-    
+
     const data = {
-      patient_id: formData.get('patient_id') as string,
+      patient_id: selectedPatientId,
       medecin_prescripteur_id: formData.get('prescripteur') === 'self' ? profile.id : null,
       type_analyse: formData.get('type_analyse') as string,
-      description: formData.get('description') as string || null,
+      description: (formData.get('description') as string) || null,
       statut: 'demandé',
     };
 
     try {
       const { error } = await supabase.from('analyses_laboratoire').insert([data]);
 
-      if (error) {
-        throw error;
-      }
-      
+      if (error) throw error;
+
       router.push('/laboratoire');
     } catch (err: any) {
       console.error(err);
@@ -76,14 +93,6 @@ export default function NouvelleAnalysePage() {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Loader2 size={24} className="animate-spin text-primary-500" />
-      </div>
-    );
-  }
 
   return (
     <div className="animate-fade-in">
@@ -110,12 +119,40 @@ export default function NouvelleAnalysePage() {
           <div className="card-body">
             <div className="form-group">
               <label className="form-label">Patient *</label>
-              <select name="patient_id" className="form-select" required>
-                <option value="">-- Choisir un patient --</option>
-                {patients.map(p => (
-                  <option key={p.id} value={p.id}>{p.prenom} {p.nom} ({p.code_patient})</option>
-                ))}
-              </select>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Tapez au moins 2 lettres pour rechercher..."
+                value={patientSearch}
+                onChange={(e) => {
+                  setPatientSearch(e.target.value);
+                  setSelectedPatientId('');
+                }}
+              />
+
+              {patientSearch.trim().length >= 2 && (
+                <div style={{ marginTop: 10, border: '1px solid var(--neutral-200)', borderRadius: 8, overflow: 'hidden' }}>
+                  {searchingPatients ? (
+                    <div style={{ padding: 12, textAlign: 'center', color: 'var(--neutral-500)' }}>Recherche en cours...</div>
+                  ) : patients.length > 0 ? (
+                    patients.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPatientId(p.id);
+                          setPatientSearch(`${p.prenom} ${p.nom} (${p.code_patient})`);
+                        }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid var(--neutral-100)', background: selectedPatientId === p.id ? 'var(--primary-50)' : 'white', cursor: 'pointer' }}
+                      >
+                        {p.prenom} {p.nom} ({p.code_patient})
+                      </button>
+                    ))
+                  ) : (
+                    <div style={{ padding: 12, textAlign: 'center', color: 'var(--neutral-500)' }}>Aucun patient trouvé</div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="form-group">

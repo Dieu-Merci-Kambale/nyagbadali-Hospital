@@ -9,69 +9,73 @@ import { useConfirm } from '@/context/ConfirmContext';
 export default function NouvelleAdmissionPage() {
   const router = useRouter();
   const { confirm } = useConfirm();
-  
-  const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  
+  const [patientLoading, setPatientLoading] = useState(false);
+
   const [patients, setPatients] = useState<any[]>([]);
   const [medecins, setMedecins] = useState<any[]>([]);
   const [litsDisponibles, setLitsDisponibles] = useState<any[]>([]);
-  
+
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [searchPatient, setSearchPatient] = useState('');
 
   useEffect(() => {
+    let ignore = false;
+
     async function fetchData() {
-      // 1. Fetch patients
+      if (searchPatient.trim().length < 2) {
+        if (!ignore) setPatients([]);
+        return;
+      }
+
+      if (!ignore) setPatientLoading(true);
+
       const { data: pData } = await supabase
         .from('patients')
         .select('id, nom, prenom, code_patient')
+        .or(`nom.ilike.%${searchPatient.trim()}%,prenom.ilike.%${searchPatient.trim()}%,code_patient.ilike.%${searchPatient.trim()}%`)
+        .limit(8)
         .order('nom');
-      
-      // 2. Fetch medecins
+
       const { data: mData } = await supabase
         .from('personnel')
         .select('id, nom, prenom')
         .in('role', ['medecin', 'medecin_chef'])
         .order('nom');
 
-      // 3. Fetch lits disponibles
       const { data: lData } = await supabase
         .from('lits')
         .select('*, chambres(numero, etage, type)')
         .eq('statut', 'disponible')
         .order('numero');
 
-      setPatients(pData || []);
-      setMedecins(mData || []);
-      setLitsDisponibles(lData || []);
-      setLoading(false);
+      if (!ignore) {
+        setPatients(pData || []);
+        setMedecins(mData || []);
+        setLitsDisponibles(lData || []);
+        setPatientLoading(false);
+      }
     }
-    
-    fetchData();
-  }, []);
 
-  const filteredPatients = patients.filter(p => 
-    searchPatient === '' || 
-    `${p.prenom} ${p.nom}`.toLowerCase().includes(searchPatient.toLowerCase()) ||
-    p.code_patient.toLowerCase().includes(searchPatient.toLowerCase())
-  ).slice(0, 5);
+    fetchData();
+    return () => { ignore = true; };
+  }, [searchPatient]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
+
     if (!selectedPatientId) {
-      setErrorMsg("Veuillez sélectionner un patient.");
+      setErrorMsg('Veuillez sélectionner un patient.');
       return;
     }
-
 
     const litId = formData.get('lit_id') as string;
 
     if (!litId) {
-      setErrorMsg("Veuillez assigner un lit disponible.");
+      setErrorMsg('Veuillez assigner un lit disponible.');
       return;
     }
 
@@ -79,7 +83,7 @@ export default function NouvelleAdmissionPage() {
       title: 'Admettre le patient',
       message: 'Confirmez-vous l\'admission de ce patient et l\'assignation de ce lit ?',
       confirmText: 'Oui, admettre',
-      type: 'info'
+      type: 'info',
     });
 
     if (!isConfirmed) return;
@@ -89,30 +93,26 @@ export default function NouvelleAdmissionPage() {
 
     const data = {
       patient_id: selectedPatientId,
-      medecin_responsable_id: formData.get('medecin_responsable_id') as string || null,
+      medecin_responsable_id: (formData.get('medecin_responsable_id') as string) || null,
       lit_id: litId,
       motif_admission: formData.get('motif_admission') as string,
       type_admission: formData.get('type_admission') as string,
-      diagnostic_entree: formData.get('diagnostic_entree') as string || null,
-      statut: 'actif'
+      diagnostic_entree: (formData.get('diagnostic_entree') as string) || null,
+      statut: 'actif',
     };
 
     try {
-      // Transaction simulée : Insérer hospitalisation, puis mettre à jour le lit
       const { error: hospError } = await supabase.from('hospitalisations').insert([data]);
 
-      if (hospError) {
-        throw hospError;
-      }
+      if (hospError) throw hospError;
 
-      // Mise à jour du lit
       const { error: litError } = await supabase
         .from('lits')
         .update({ statut: 'occupé' })
         .eq('id', litId);
 
       if (litError) {
-        throw new Error("Admission réussie mais échec de la mise à jour du lit: " + litError.message);
+        throw new Error('Admission réussie mais échec de la mise à jour du lit: ' + litError.message);
       }
 
       router.push('/hospitalisation');
@@ -122,14 +122,6 @@ export default function NouvelleAdmissionPage() {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Loader2 size={24} className="animate-spin text-primary-500" />
-      </div>
-    );
-  }
 
   return (
     <div className="animate-fade-in">
@@ -152,7 +144,6 @@ export default function NouvelleAdmissionPage() {
       )}
 
       <form onSubmit={handleSubmit} style={{ maxWidth: 800 }}>
-        {/* SÉLECTION DU PATIENT */}
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-header"><span className="card-title">1. Patient à admettre</span></div>
           <div className="card-body">
@@ -160,30 +151,32 @@ export default function NouvelleAdmissionPage() {
               <div>
                 <div className="header-search" style={{ marginBottom: 16 }}>
                   <Search className="header-search-icon" />
-                  <input 
-                    type="text" 
-                    placeholder="Rechercher par nom ou code patient..." 
+                  <input
+                    type="text"
+                    placeholder="Rechercher par nom ou code patient..."
                     value={searchPatient}
                     onChange={(e) => setSearchPatient(e.target.value)}
                   />
                 </div>
                 {searchPatient && (
                   <div style={{ border: '1px solid var(--neutral-200)', borderRadius: 8, overflow: 'hidden' }}>
-                    {filteredPatients.map(p => (
-                      <div 
-                        key={p.id} 
-                        style={{ padding: '12px 16px', borderBottom: '1px solid var(--neutral-100)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                        className="hover:bg-neutral-50"
-                        onClick={() => { setSelectedPatientId(p.id); setSearchPatient(''); }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 600 }}>{p.prenom} {p.nom}</div>
-                          <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>{p.code_patient}</div>
+                    {patientLoading ? (
+                      <div style={{ padding: 16, textAlign: 'center', color: 'var(--neutral-500)' }}>Recherche en cours...</div>
+                    ) : patients.length > 0 ? (
+                      patients.map((p) => (
+                        <div
+                          key={p.id}
+                          style={{ padding: '12px 16px', borderBottom: '1px solid var(--neutral-100)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                          onClick={() => { setSelectedPatientId(p.id); setSearchPatient(''); }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{p.prenom} {p.nom}</div>
+                            <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>{p.code_patient}</div>
+                          </div>
+                          <button type="button" className="btn btn-sm btn-outline">Sélectionner</button>
                         </div>
-                        <button type="button" className="btn btn-sm btn-outline">Sélectionner</button>
-                      </div>
-                    ))}
-                    {filteredPatients.length === 0 && (
+                      ))
+                    ) : (
                       <div style={{ padding: 16, textAlign: 'center', color: 'var(--neutral-500)' }}>Aucun patient trouvé</div>
                     )}
                   </div>
@@ -194,10 +187,10 @@ export default function NouvelleAdmissionPage() {
                 <div>
                   <span style={{ fontSize: 12, color: 'var(--primary-600)', fontWeight: 600 }}>Patient Sélectionné</span>
                   <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--neutral-900)' }}>
-                    {patients.find(p => p.id === selectedPatientId)?.prenom} {patients.find(p => p.id === selectedPatientId)?.nom}
+                    {patients.find((p) => p.id === selectedPatientId)?.prenom} {patients.find((p) => p.id === selectedPatientId)?.nom}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--neutral-600)' }}>
-                    {patients.find(p => p.id === selectedPatientId)?.code_patient}
+                    {patients.find((p) => p.id === selectedPatientId)?.code_patient}
                   </div>
                 </div>
                 <button type="button" onClick={() => setSelectedPatientId('')} className="btn btn-sm btn-ghost text-danger-600">
@@ -208,7 +201,6 @@ export default function NouvelleAdmissionPage() {
           </div>
         </div>
 
-        {/* DETAILS ADMISSION */}
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-header"><span className="card-title">2. Détails Médicaux</span></div>
           <div className="card-body">
@@ -225,7 +217,7 @@ export default function NouvelleAdmissionPage() {
                 <label className="form-label">Médecin Traitant Responsable</label>
                 <select name="medecin_responsable_id" className="form-select">
                   <option value="">Sélectionner un médecin</option>
-                  {medecins.map(m => (
+                  {medecins.map((m) => (
                     <option key={m.id} value={m.id}>Dr. {m.prenom} {m.nom}</option>
                   ))}
                 </select>
@@ -244,7 +236,6 @@ export default function NouvelleAdmissionPage() {
           </div>
         </div>
 
-        {/* ASSIGNATION DU LIT */}
         <div className="card" style={{ marginBottom: 24 }}>
           <div className="card-header">
             <span className="card-title">3. Assignation du Lit</span>
@@ -260,7 +251,7 @@ export default function NouvelleAdmissionPage() {
                 <label className="form-label">Choisir un lit disponible *</label>
                 <select name="lit_id" className="form-select" required style={{ padding: 12, height: 'auto' }}>
                   <option value="">Sélectionnez un lit...</option>
-                  {litsDisponibles.map(lit => (
+                  {litsDisponibles.map((lit) => (
                     <option key={lit.id} value={lit.id}>
                       Chambre {lit.chambres?.numero} ({lit.chambres?.type}) - Lit {lit.numero} ({lit.type_lit.replace('_', ' ')})
                     </option>

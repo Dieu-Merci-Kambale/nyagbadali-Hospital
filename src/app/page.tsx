@@ -2,19 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import {
-  LayoutDashboard,
   Users,
   CalendarDays,
   BedDouble,
-  DollarSign,
   TrendingUp,
-  Activity,
   Loader2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 function formatCDF(montant: number): string {
-  return new Intl.NumberFormat('fr-CD', { style: 'decimal', maximumFractionDigits: 0 }).format(montant) + ' FC';
+  return new Intl.NumberFormat('fr-FR', { useGrouping: true, maximumFractionDigits: 0 }).format(montant) + ' FC';
 }
 
 interface Stats {
@@ -37,54 +34,49 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadDashboard() {
       setLoading(true);
+
       const now = new Date();
       const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const localMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
-      // Total patients
-      const { count: totalPatients } = await supabase
-        .from('patients').select('*', { count: 'exact', head: true });
+      const [
+        totalPatientsQuery,
+        patientsAujourdhuiQuery,
+        rdvAujourdhuiQuery,
+        litsTotalQuery,
+        litsOccupesQuery,
+        paiementsMoisQuery,
+        derniersPatientsQuery,
+      ] = await Promise.all([
+        supabase.from('patients').select('*', { count: 'exact', head: true }),
+        supabase.from('patients').select('*', { count: 'exact', head: true }).gte('created_at', localToday),
+        supabase.from('rendez_vous').select('*', { count: 'exact', head: true }).like('date_heure', `${localToday}%`),
+        supabase.from('lits').select('*', { count: 'exact', head: true }),
+        supabase.from('lits').select('*', { count: 'exact', head: true }).eq('statut', 'occupé'),
+        supabase.from('paiements').select('montant').gte('date_paiement', localMonthStart),
+        supabase.from('patients').select('*').order('created_at', { ascending: false }).limit(5),
+      ]);
 
-      // Patients aujourd'hui
-      const { count: patientsAujourdhui } = await supabase
-        .from('patients').select('*', { count: 'exact', head: true })
-        .gte('created_at', localToday);
-
-      // RDV aujourd'hui (date_heure contains YYYY-MM-DD)
-      const { count: rdvAujourdhui } = await supabase
-        .from('rendez_vous').select('*', { count: 'exact', head: true })
-        .like('date_heure', `${localToday}%`);
-
-      // Lits
-      const { count: litsTotal } = await supabase
-        .from('lits').select('*', { count: 'exact', head: true });
-      const { count: litsOccupes } = await supabase
-        .from('lits').select('*', { count: 'exact', head: true })
-        .eq('statut', 'occupé');
-
-      // Revenu mensuel (calculé sur les paiements reçus ce mois-ci)
-      const { data: paiementsMois } = await supabase
-        .from('paiements').select('montant')
-        .gte('date_paiement', localMonthStart);
-      
-      const revenuMensuel = paiementsMois?.reduce((sum, p) => sum + (p.montant || 0), 0) || 0;
-
-      // Derniers patients
-      const { data: derniers } = await supabase
-        .from('patients').select('*')
-        .order('created_at', { ascending: false }).limit(5);
+      const totalPatients = totalPatientsQuery.count || 0;
+      const patientsAujourdhui = patientsAujourdhuiQuery.count || 0;
+      const rdvAujourdhui = rdvAujourdhuiQuery.count || 0;
+      const litsTotal = litsTotalQuery.count || 0;
+      const litsOccupes = litsOccupesQuery.count || 0;
+      const revenuMensuel = (paiementsMoisQuery.data ?? []).reduce((sum, paiement) => sum + (Number(paiement.montant) || 0), 0);
+      const derniers = derniersPatientsQuery.data ?? [];
 
       setStats({
-        totalPatients: totalPatients || 0,
-        patientsAujourdhui: patientsAujourdhui || 0,
-        rdvAujourdhui: rdvAujourdhui || 0,
-        litsTotal: litsTotal || 0,
-        litsOccupes: litsOccupes || 0,
+        totalPatients,
+        patientsAujourdhui,
+        rdvAujourdhui,
+        litsTotal,
+        litsOccupes,
         revenuMensuel,
       });
-      setRecentPatients(derniers || []);
+      setRecentPatients(derniers);
       setLoading(false);
     }
+
     loadDashboard();
   }, []);
 

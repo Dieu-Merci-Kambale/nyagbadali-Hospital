@@ -6,11 +6,21 @@ import { ArrowLeft, Loader2, AlertCircle, Printer, CreditCard, CheckCircle, Cloc
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useConfirm } from '@/context/ConfirmContext';
+import { buildPaymentReceiptPdf } from '@/lib/document-models';
+import { useAuth } from '@/contexts/AuthContext';
+import { roleLabels } from '@/lib/role-permissions';
+
+function formatMoneySafe(value: number | string): string {
+  const cleaned = typeof value === 'string' ? value.replace(/[^\d,.-]/g, '').replace(',', '.') : value;
+  const numericValue = Number(cleaned || 0);
+  return `${Math.round(numericValue).toLocaleString('fr-FR', { maximumFractionDigits: 0, useGrouping: true })} FC`;
+}
 
 export default function FactureDetailsPage() {
   const router = useRouter();
   const { id } = useParams();
   const { confirm } = useConfirm();
+  const { profile } = useAuth();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -135,6 +145,26 @@ export default function FactureDetailsPage() {
 
   const resteAPayer = facture.montant_patient - facture.totalPaye;
 
+  const handleDownloadReceipt = async (payment?: any) => {
+    try {
+      const pdf = await buildPaymentReceiptPdf({
+        facture: { ...facture, totalPaye: facture.totalPaye },
+        payment,
+        paiements: facture.paiements || [],
+        printedBy: profile ? {
+          prenom: profile.prenom,
+          nom: profile.nom,
+          role: roleLabels[profile.role] || profile.role,
+        } : undefined,
+        printedAt: new Date().toISOString(),
+      });
+      pdf.save(`recu-${facture.numero_facture || facture.id}.pdf`);
+    } catch (error: any) {
+      console.error('Erreur génération reçu PDF:', error);
+      toast.error('Le reçu n’a pas pu être généré. Vérifiez les données de facturation.');
+    }
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -153,8 +183,8 @@ export default function FactureDetailsPage() {
             {facture.statut === 'en_attente' && <Clock size={16} style={{ marginRight: 6 }} />}
             {facture.statut.charAt(0).toUpperCase() + facture.statut.slice(1)}
           </span>
-          <button className="btn btn-outline" onClick={() => window.print()}>
-            <Printer size={16} /> Imprimer
+          <button className="btn btn-outline" onClick={() => handleDownloadReceipt()}>
+            <Printer size={16} /> Reçu PDF
           </button>
         </div>
       </div>
@@ -191,8 +221,8 @@ export default function FactureDetailsPage() {
                     <tr key={l.id}>
                       <td style={{ fontWeight: 500 }}>{l.description}</td>
                       <td style={{ textAlign: 'center' }}>{l.quantite}</td>
-                      <td style={{ textAlign: 'right' }}>{l.prix_unitaire} FC</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{l.montant} FC</td>
+                      <td style={{ textAlign: 'right' }}>{formatMoneySafe(l.prix_unitaire)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatMoneySafe(l.montant)}</td>
                     </tr>
                   ))}
                   {(!facture.lignes_facture || facture.lignes_facture.length === 0) && (
@@ -205,17 +235,17 @@ export default function FactureDetailsPage() {
                 <div style={{ width: 300 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                     <span style={{ color: 'var(--neutral-600)' }}>Total Brut</span>
-                    <span style={{ fontWeight: 500 }}>{facture.montant_total} FC</span>
+                    <span style={{ fontWeight: 500 }}>{formatMoneySafe(facture.montant_total)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
                     <span style={{ color: 'var(--neutral-600)' }}>Prise en charge Assurance</span>
                     <span style={{ fontWeight: 500, color: facture.montant_assurance > 0 ? 'var(--primary-600)' : 'var(--neutral-800)' }}>
-                      {facture.montant_assurance > 0 ? `- ${facture.montant_assurance}` : '0'} FC
+                      {facture.montant_assurance > 0 ? `- ${formatMoneySafe(facture.montant_assurance)}` : '0 FC'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 16, borderTop: '1px solid var(--neutral-200)', fontSize: 18, fontWeight: 700 }}>
                     <span>Net à payer (Patient)</span>
-                    <span style={{ color: 'var(--primary-600)' }}>{facture.montant_patient} FC</span>
+                    <span style={{ color: 'var(--primary-600)' }}>{formatMoneySafe(facture.montant_patient)}</span>
                   </div>
                 </div>
               </div>
@@ -247,7 +277,7 @@ export default function FactureDetailsPage() {
                       max={resteAPayer} 
                       required 
                     />
-                    <div style={{ fontSize: 12, color: 'var(--neutral-500)', marginTop: 4 }}>Reste à payer : {resteAPayer} FC</div>
+                    <div style={{ fontSize: 12, color: 'var(--neutral-500)', marginTop: 4 }}>Reste à payer : {formatMoneySafe(resteAPayer)}</div>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Mode de paiement</label>
@@ -275,17 +305,22 @@ export default function FactureDetailsPage() {
                   {facture.paiements.map((p: any) => (
                     <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--neutral-100)' }}>
                       <div>
-                        <div style={{ fontWeight: 600 }}>{p.montant} FC</div>
+                        <div style={{ fontWeight: 600 }}>{formatMoneySafe(p.montant)}</div>
                         <div style={{ fontSize: 12, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>{p.mode_paiement.replace('_', ' ')}</div>
                       </div>
-                      <div style={{ fontSize: 13, color: 'var(--neutral-400)' }}>
-                        {new Date(p.date_paiement).toLocaleDateString('fr-FR')} à {new Date(p.date_paiement).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ fontSize: 13, color: 'var(--neutral-400)' }}>
+                          {new Date(p.date_paiement).toLocaleDateString('fr-FR')} à {new Date(p.date_paiement).toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleDownloadReceipt(p)}>
+                          <Printer size={14} /> Reçu
+                        </button>
                       </div>
                     </div>
                   ))}
                   <div style={{ padding: '16px 20px', background: 'var(--success-50)', display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: 'var(--success-700)' }}>
                     <span>Total Encaissé</span>
-                    <span>{facture.totalPaye} FC</span>
+                    <span>{formatMoneySafe(facture.totalPaye)}</span>
                   </div>
                 </div>
               ) : (

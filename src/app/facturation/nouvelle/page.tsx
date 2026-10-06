@@ -12,46 +12,59 @@ export default function NouvelleFacturePage() {
   const searchParams = useSearchParams();
   const patientIdParam = searchParams.get('patient_id');
   const { confirm } = useConfirm();
-  
-  const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
+  const [searchingPatients, setSearchingPatients] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  
-  // Patient Search State
+
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState(patientIdParam || '');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // Lignes Facture State
   const [lignes, setLignes] = useState([{ id: Date.now().toString(), description: '', quantite: 1, prix_unitaire: 0 }]);
   const [tauxAssurance, setTauxAssurance] = useState<number>(0);
 
   useEffect(() => {
-    async function fetchPatients() {
+    let ignore = false;
+
+    async function fetchPatientsByQuery() {
+      if (!patientIdParam && searchQuery.trim().length < 2) {
+        if (!ignore) setPatients([]);
+        return;
+      }
+
+      if (patientIdParam) {
+        const { data } = await supabase
+          .from('patients')
+          .select('id, nom, prenom, code_patient')
+          .eq('id', patientIdParam)
+          .single();
+
+        if (!ignore && data) {
+          setPatients([data]);
+          setSearchQuery(`${data.prenom} ${data.nom} (${data.code_patient})`);
+        }
+        return;
+      }
+
+      if (!ignore) setSearchingPatients(true);
       const { data } = await supabase
         .from('patients')
         .select('id, nom, prenom, code_patient')
+        .or(`nom.ilike.%${searchQuery.trim()}%,prenom.ilike.%${searchQuery.trim()}%,code_patient.ilike.%${searchQuery.trim()}%`)
+        .limit(10)
         .order('nom');
-      
-      if (data) {
-        setPatients(data);
-        if (patientIdParam) {
-          const p = data.find(p => p.id === patientIdParam);
-          if (p) setSearchQuery(`${p.prenom} ${p.nom} (${p.code_patient})`);
-        }
-      }
-      setLoading(false);
-    }
-    fetchPatients();
-  }, [patientIdParam]);
 
-  const filteredPatients = patients.filter(p => {
-    const q = searchQuery.toLowerCase();
-    return p.nom.toLowerCase().includes(q) || 
-           p.prenom.toLowerCase().includes(q) || 
-           p.code_patient.toLowerCase().includes(q);
-  });
+      if (!ignore) {
+        setPatients(data || []);
+        setSearchingPatients(false);
+      }
+    }
+
+    fetchPatientsByQuery();
+    return () => { ignore = true; };
+  }, [patientIdParam, searchQuery]);
 
   const addLigne = () => {
     setLignes([...lignes, { id: Date.now().toString(), description: '', quantite: 1, prix_unitaire: 0 }]);
@@ -59,12 +72,12 @@ export default function NouvelleFacturePage() {
 
   const removeLigne = (idToRemove: string) => {
     if (lignes.length > 1) {
-      setLignes(lignes.filter(l => l.id !== idToRemove));
+      setLignes(lignes.filter((l) => l.id !== idToRemove));
     }
   };
 
   const updateLigne = (id: string, field: string, value: any) => {
-    setLignes(lignes.map(l => l.id === id ? { ...l, [field]: value } : l));
+    setLignes(lignes.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
   };
 
   const totalGlobal = lignes.reduce((acc, l) => acc + (l.quantite * l.prix_unitaire), 0);
@@ -73,14 +86,14 @@ export default function NouvelleFacturePage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
+
     if (!selectedPatientId) {
-      setErrorMsg("Veuillez sélectionner un patient.");
+      setErrorMsg('Veuillez sélectionner un patient.');
       return;
     }
 
     if (totalGlobal === 0) {
-      setErrorMsg("Le montant total de la facture ne peut pas être zéro.");
+      setErrorMsg('Le montant total de la facture ne peut pas être zéro.');
       return;
     }
 
@@ -88,7 +101,7 @@ export default function NouvelleFacturePage() {
       title: 'Créer la facture',
       message: `Êtes-vous sûr de vouloir générer cette facture d'un montant de ${totalGlobal} FC ?`,
       confirmText: 'Oui, créer',
-      type: 'info'
+      type: 'info',
     });
 
     if (!isConfirmed) return;
@@ -96,7 +109,6 @@ export default function NouvelleFacturePage() {
     setSaving(true);
     setErrorMsg('');
 
-    // 1. Créer la facture principale
     const factureData = {
       numero_facture: `FAC-${Date.now().toString().slice(-6)}`,
       patient_id: selectedPatientId,
@@ -104,7 +116,7 @@ export default function NouvelleFacturePage() {
       montant_assurance: montantAssurance,
       montant_patient: montantPatient,
       tva: 0,
-      statut: montantPatient === 0 ? 'payée' : 'en_attente', // Si assurance 100%, alors payée
+      statut: montantPatient === 0 ? 'payée' : 'en_attente',
       date_facture: new Date().toISOString().split('T')[0],
     };
 
@@ -121,15 +133,14 @@ export default function NouvelleFacturePage() {
       return;
     }
 
-    // 2. Créer les lignes de facture
     if (facture) {
-      const lignesToInsert = lignes.filter(l => l.description.trim() !== '').map(l => ({
+      const lignesToInsert = lignes.filter((l) => l.description.trim() !== '').map((l) => ({
         facture_id: facture.id,
         description: l.description,
         quantite: l.quantite,
         prix_unitaire: l.prix_unitaire,
         montant: l.quantite * l.prix_unitaire,
-        couvert_assurance: false
+        couvert_assurance: false,
       }));
 
       if (lignesToInsert.length > 0) {
@@ -141,18 +152,9 @@ export default function NouvelleFacturePage() {
       }
     }
 
-    toast.success("Facture créée avec succès !");
-    // On redirige vers la vue détaillée de la facture pour gérer le paiement
+    toast.success('Facture créée avec succès !');
     router.push(`/facturation/${facture.id}/edit`);
   };
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Loader2 size={24} className="animate-spin text-primary-500" />
-      </div>
-    );
-  }
 
   return (
     <div className="animate-fade-in">
@@ -178,16 +180,15 @@ export default function NouvelleFacturePage() {
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-header"><span className="card-title">Informations Générales</span></div>
           <div className="card-body">
-            
             <div className="form-group" style={{ position: 'relative', maxWidth: 600 }}>
               <label className="form-label">Rechercher le patient (Nom, Prénom ou ID) *</label>
               <div style={{ position: 'relative' }}>
                 <Search size={16} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--neutral-400)' }} />
-                <input 
-                  type="text" 
-                  className="form-input" 
+                <input
+                  type="text"
+                  className="form-input"
                   style={{ paddingLeft: 36 }}
-                  placeholder="Tapez pour rechercher..." 
+                  placeholder="Tapez au moins 2 lettres..."
                   value={searchQuery}
                   onFocus={() => setIsDropdownOpen(true)}
                   onChange={(e) => {
@@ -195,29 +196,23 @@ export default function NouvelleFacturePage() {
                     setSelectedPatientId('');
                     setIsDropdownOpen(true);
                   }}
-                  onBlur={() => {
-                    setTimeout(() => setIsDropdownOpen(false), 200);
-                  }}
+                  onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
                   required={!selectedPatientId}
                 />
               </div>
-              
+
               {isDropdownOpen && (
-                <div style={{ 
-                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, 
-                  background: 'white', border: '1px solid var(--neutral-200)', borderRadius: 8, 
-                  marginTop: 4, maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                }}>
-                  {filteredPatients.length > 0 ? (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, background: 'white', border: '1px solid var(--neutral-200)', borderRadius: 8, marginTop: 4, maxHeight: 220, overflowY: 'auto', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}>
+                  {searchingPatients ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, color: 'var(--neutral-500)' }}>
+                      <Loader2 size={16} className="animate-spin" /> Recherche...
+                    </div>
+                  ) : patients.length > 0 ? (
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                      {filteredPatients.map(p => (
-                        <li 
+                      {patients.map((p) => (
+                        <li
                           key={p.id}
-                          style={{ 
-                            padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid var(--neutral-100)',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            backgroundColor: selectedPatientId === p.id ? 'var(--primary-50)' : 'transparent'
-                          }}
+                          style={{ padding: '10px 16px', cursor: 'pointer', borderBottom: '1px solid var(--neutral-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: selectedPatientId === p.id ? 'var(--primary-50)' : 'transparent' }}
                           onMouseDown={() => {
                             setSelectedPatientId(p.id);
                             setSearchQuery(`${p.prenom} ${p.nom} (${p.code_patient})`);
@@ -233,7 +228,9 @@ export default function NouvelleFacturePage() {
                       ))}
                     </ul>
                   ) : (
-                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--neutral-500)' }}>Aucun patient trouvé.</div>
+                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--neutral-500)' }}>
+                      {searchQuery.trim().length >= 2 ? 'Aucun patient trouvé.' : 'Tapez au moins 2 lettres pour lancer la recherche.'}
+                    </div>
                   )}
                 </div>
               )}
@@ -241,11 +238,11 @@ export default function NouvelleFacturePage() {
 
             <div className="form-group" style={{ marginTop: 24, maxWidth: 300 }}>
               <label className="form-label">Taux de couverture Assurance (%)</label>
-              <input 
-                type="number" 
-                className="form-input" 
-                min="0" 
-                max="100" 
+              <input
+                type="number"
+                className="form-input"
+                min="0"
+                max="100"
                 value={tauxAssurance}
                 onChange={(e) => setTauxAssurance(parseInt(e.target.value) || 0)}
               />

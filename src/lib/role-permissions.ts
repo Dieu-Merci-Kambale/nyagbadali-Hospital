@@ -9,15 +9,11 @@ export type AppModule =
   | 'rendez-vous'
   | 'consultations'
   | 'hospitalisation'
-  | 'urgences'
   | 'chambres'
   | 'pharmacie'
   | 'laboratoire'
   | 'personnel'
-  | 'facturation'
-  | 'inventaire'
-  | 'rapports'
-  | 'parametres';
+  | 'facturation';
 
 // Mapping module → route
 export const moduleRoutes: Record<AppModule, string> = {
@@ -26,15 +22,11 @@ export const moduleRoutes: Record<AppModule, string> = {
   'rendez-vous': '/rendez-vous',
   'consultations': '/consultations',
   'hospitalisation': '/hospitalisation',
-  'urgences': '/urgences',
   'chambres': '/chambres',
   'pharmacie': '/pharmacie',
   'laboratoire': '/laboratoire',
   'personnel': '/personnel',
   'facturation': '/facturation',
-  'inventaire': '/inventaire',
-  'rapports': '/rapports',
-  'parametres': '/parametres',
 };
 
 // =====================================================
@@ -47,34 +39,33 @@ export const moduleRoutes: Record<AppModule, string> = {
 const rolePermissions: Record<RolePersonnel, AppModule[]> = {
   super_admin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'urgences', 'chambres', 'pharmacie', 'laboratoire', 'personnel', 'facturation',
-    'inventaire', 'rapports', 'parametres',
+    'chambres', 'pharmacie', 'laboratoire', 'personnel', 'facturation',
   ],
   admin: [
     'dashboard', 'patients', 'rendez-vous', 'pharmacie', 'chambres',
-    'personnel', 'facturation', 'inventaire', 'rapports', 'parametres',
+    'personnel', 'facturation',
   ],
   medecin_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'urgences', 'chambres', 'pharmacie', 'laboratoire', 'rapports',
+    'chambres', 'pharmacie', 'laboratoire',
   ],
   medecin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'urgences', 'chambres', 'pharmacie', 'laboratoire',
+    'chambres', 'pharmacie', 'laboratoire',
   ],
   infirmier_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'urgences', 'chambres', 'rapports',
+    'chambres',
   ],
   infirmier: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'urgences', 'chambres',
+    'chambres',
   ],
   technicien_labo: [
     'dashboard', 'patients', 'laboratoire',
   ],
   pharmacien: [
-    'dashboard', 'pharmacie', 'inventaire',
+    'dashboard', 'pharmacie',
   ],
   caissier: [
     'dashboard', 'facturation',

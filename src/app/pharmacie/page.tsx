@@ -25,7 +25,7 @@ import type { Medicament } from '@/types';
 import { useConfirm } from '@/context/ConfirmContext';
 
 function formatCDF(montant: number): string {
-  return new Intl.NumberFormat('fr-CD', { style: 'decimal', maximumFractionDigits: 0 }).format(montant) + ' FC';
+  return new Intl.NumberFormat('fr-FR', { useGrouping: true, maximumFractionDigits: 0 }).format(montant) + ' FC';
 }
 
 export default function PharmacieHubPage() {
