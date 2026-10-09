@@ -19,6 +19,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Patient } from '@/types';
+import { downloadCsv, formatDate } from '@/lib/format';
+
+const PAGE_SIZE = 20;
 
 function getAge(dateNaissance: string): number {
   if (!dateNaissance) return 0;
@@ -38,6 +41,9 @@ export default function PatientsPage() {
   const [search, setSearch] = useState('');
   const [filterSexe, setFilterSexe] = useState<string>('tous');
   const [showFilters, setShowFilters] = useState(false);
+  const [filterStatut, setFilterStatut] = useState<string>('tous');
+  const [filterAssurance, setFilterAssurance] = useState<string>('tous');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     async function fetchPatients() {
@@ -65,8 +71,25 @@ export default function PatientsPage() {
       p.code_patient?.toLowerCase().includes(search.toLowerCase()) ||
       p.telephone?.includes(search);
     const matchSexe = filterSexe === 'tous' || p.sexe === filterSexe;
-    return matchSearch && matchSexe;
+    const matchStatut = filterStatut === 'tous' || p.statut === filterStatut;
+    const matchAssurance = filterAssurance === 'tous' || (filterAssurance === 'oui' ? !!p.assureur : !p.assureur);
+    return matchSearch && matchSexe && matchStatut && matchAssurance;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const handleExport = () => {
+    downloadCsv(
+      `patients-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['Code', 'Nom', 'Prénom', 'Sexe', 'Date de naissance', 'Âge', 'Téléphone', 'Email', 'Adresse', 'Groupe sanguin', 'Assureur', 'N° assurance', "Contact d'urgence", 'Tél. urgence', 'Statut', 'Enregistré le'],
+      filtered.map((p) => [
+        p.code_patient, p.nom, p.prenom, p.sexe, formatDate(p.date_naissance), getAge(p.date_naissance), p.telephone, p.email, p.adresse,
+        p.groupe_sanguin, p.assureur, p.numero_assurance, p.contact_urgence_nom, p.contact_urgence_tel, p.statut, formatDate(p.created_at),
+      ])
+    );
+  };
 
   return (
     <div className="animate-fade-in">
@@ -82,7 +105,7 @@ export default function PatientsPage() {
           <button className="btn btn-outline" onClick={() => setShowFilters(!showFilters)}>
             <Filter size={16} /> Filtres
           </button>
-          <button className="btn btn-outline">
+          <button className="btn btn-outline" onClick={handleExport} disabled={loading || filtered.length === 0} title="Exporter la liste filtrée (CSV / Excel)">
             <Download size={16} /> Exporter
           </button>
           <Link href="/patients/nouveau" className="btn btn-primary">
@@ -101,7 +124,7 @@ export default function PatientsPage() {
                 type="text"
                 placeholder="Rechercher par nom, code patient ou téléphone..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 id="patient-search"
               />
             </div>
@@ -110,13 +133,24 @@ export default function PatientsPage() {
                 <select
                   className="form-select"
                   value={filterSexe}
-                  onChange={(e) => setFilterSexe(e.target.value)}
+                  onChange={(e) => { setFilterSexe(e.target.value); setPage(1); }}
                   style={{ width: 140 }}
                   id="filter-sexe"
                 >
                   <option value="tous">Tous les sexes</option>
                   <option value="M">Masculin</option>
                   <option value="F">Féminin</option>
+                </select>
+                <select className="form-select" value={filterStatut} onChange={(e) => { setFilterStatut(e.target.value); setPage(1); }} style={{ width: 150 }}>
+                  <option value="tous">Tous les statuts</option>
+                  <option value="actif">Actifs</option>
+                  <option value="inactif">Inactifs</option>
+                  <option value="décédé">Décédés</option>
+                </select>
+                <select className="form-select" value={filterAssurance} onChange={(e) => { setFilterAssurance(e.target.value); setPage(1); }} style={{ width: 160 }}>
+                  <option value="tous">Assurés et non assurés</option>
+                  <option value="oui">Assurés</option>
+                  <option value="non">Non assurés</option>
                 </select>
               </>
             )}
@@ -163,7 +197,7 @@ export default function PatientsPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((patient, index) => (
+              pageItems.map((patient, index) => (
                 <tr key={patient.id} className="animate-slide-in-right" style={{ animationDelay: `${index * 0.03}s` }}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -261,13 +295,25 @@ export default function PatientsPage() {
             fontSize: 13,
             color: 'var(--neutral-500)',
           }}>
-            <span>Affichage de {filtered.length} sur {patients.length} patients</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button className="btn btn-outline btn-sm" disabled>
+            <span>
+              {filtered.length === 0
+                ? 'Aucun résultat'
+                : `Affichage de ${(currentPage - 1) * PAGE_SIZE + 1} à ${Math.min(currentPage * PAGE_SIZE, filtered.length)} sur ${filtered.length} patient${filtered.length > 1 ? 's' : ''}`}
+              {filtered.length !== patients.length && ` (${patients.length} au total)`}
+            </span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button className="btn btn-outline btn-sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
                 <ChevronLeft size={14} /> Précédent
               </button>
-              <button className="btn btn-primary btn-sm">1</button>
-              <button className="btn btn-outline btn-sm" disabled>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((n) => n === 1 || n === totalPages || Math.abs(n - currentPage) <= 1)
+                .map((n, i, arr) => (
+                  <span key={n} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {i > 0 && n - arr[i - 1] > 1 && <span>…</span>}
+                    <button className={`btn btn-sm ${n === currentPage ? 'btn-primary' : 'btn-outline'}`} onClick={() => setPage(n)}>{n}</button>
+                  </span>
+                ))}
+              <button className="btn btn-outline btn-sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
                 Suivant <ChevronRight size={14} />
               </button>
             </div>

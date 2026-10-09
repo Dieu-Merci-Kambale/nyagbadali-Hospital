@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { toDateKey } from '@/lib/format';
 
 export default function HospitalisationPage() {
   const [hospitalisations, setHospitalisations] = useState<any[]>([]);
@@ -55,8 +56,8 @@ export default function HospitalisationPage() {
         setHospitalisations(hospData || []);
         
         // Count admissions today
-        const today = new Date().toISOString().split('T')[0];
-        const admissionsAujourdhui = hospData?.filter(h => h.date_admission.startsWith(today)).length || 0;
+        const today = toDateKey();
+        const admissionsAujourdhui = hospData?.filter(h => toDateKey(h.date_admission) === today).length || 0;
         
         setStats({
           totalLits,
@@ -151,6 +152,7 @@ export default function HospitalisationPage() {
               <option value="actif">Actuellement internés</option>
               <option value="sorti">Sortis / Déchargés</option>
               <option value="transféré">Transférés</option>
+              <option value="décédé">Décédés</option>
             </select>
           </div>
         </div>
@@ -230,8 +232,8 @@ export default function HospitalisationPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <Link href={`/hospitalisation/${hosp.id}/edit`} className="btn btn-sm btn-outline">
-                          {isActif ? 'Gérer / Sortie' : 'Détails'} <ArrowRight size={14} style={{ marginLeft: 4 }} />
+                        <Link href={`/hospitalisation/${hosp.id}`} className="btn btn-sm btn-outline">
+                          {isActif ? 'Suivi du séjour' : 'Détails'} <ArrowRight size={14} style={{ marginLeft: 4 }} />
                         </Link>
                       </div>
                     </td>

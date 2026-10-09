@@ -17,21 +17,42 @@ import {
   ArrowRight,
   ShieldAlert,
   List as ListIcon,
-  LayoutGrid
+  LayoutGrid,
+  History,
+  PackagePlus,
+  Download,
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import Modal from '@/components/ui/Modal';
+import { MOUVEMENT_TYPES, statusBadge, formatDateTime, formatMoney, downloadCsv, explainDbError } from '@/lib/format';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import type { Medicament } from '@/types';
 import { useConfirm } from '@/context/ConfirmContext';
 
-function formatCDF(montant: number): string {
-  return new Intl.NumberFormat('fr-FR', { useGrouping: true, maximumFractionDigits: 0 }).format(montant) + ' FC';
-}
+const formatCDF = formatMoney;
+
+type StockForm = {
+  med: Medicament;
+  type: 'entrée' | 'ajustement' | 'péremption';
+  quantite: number;
+  motif: string;
+  reference: string;
+  fournisseur: string;
+  date_peremption: string;
+};
 
 export default function PharmacieHubPage() {
   const { confirm } = useConfirm();
-  
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventaire' | 'prescriptions'>('dashboard');
+  const { profile } = useAuth();
+
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'inventaire' | 'prescriptions' | 'mouvements'>('dashboard');
+  const [mouvements, setMouvements] = useState<any[]>([]);
+  const [mouvementsError, setMouvementsError] = useState('');
+  const [mvtFilter, setMvtFilter] = useState('tous');
+  const [stockForm, setStockForm] = useState<StockForm | null>(null);
+  const [savingStock, setSavingStock] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   
   const [medicaments, setMedicaments] = useState<Medicament[]>([]);
@@ -78,12 +99,21 @@ export default function PharmacieHubPage() {
     // Fetch active prescriptions
     const { data: presData } = await supabase
       .from('prescriptions')
-      .select('*, consultations(patients(nom, prenom, code_patient))')
+      .select('*, consultations(date_consultation, patients(nom, prenom, code_patient), personnel(nom, prenom))')
       .eq('statut', 'active')
       .order('created_at', { ascending: false });
 
     setPrescriptions(presData || []);
-    
+
+    // Historique des mouvements de stock
+    const { data: mvtData, error: mvtError } = await supabase
+      .from('mouvements_stock')
+      .select('*, medicaments(nom_commercial, dosage, code), auteur:personnel(nom, prenom)')
+      .order('created_at', { ascending: false })
+      .limit(300);
+    setMouvementsError(mvtError ? explainDbError(mvtError) : '');
+    setMouvements(mvtData || []);
+
     setLoading(false);
   };
 
@@ -95,7 +125,7 @@ export default function PharmacieHubPage() {
   const handleDispense = async (prescriptionId: string, medicamentId: string | undefined, nomMed: string) => {
     const qty = dispenseQty[prescriptionId];
     if (!qty || qty <= 0) {
-      alert("Veuillez saisir une quantité valide à délivrer.");
+      toast.error("Veuillez saisir une quantité valide à délivrer.");
       return;
     }
 
@@ -103,12 +133,12 @@ export default function PharmacieHubPage() {
     const med = medicaments.find(m => m.id === medicamentId || (m.nom_commercial.toLowerCase() === nomMed.toLowerCase() && m.statut !== 'rupture' && m.statut !== 'expiré'));
 
     if (!med) {
-      alert("Ce médicament n'est pas trouvé dans le stock ou est expiré/en rupture.");
+      toast.error("Ce médicament n'est pas trouvé dans le stock ou est expiré / en rupture.");
       return;
     }
 
     if (med.stock_actuel < qty) {
-      alert(`Stock insuffisant. Il ne reste que ${med.stock_actuel} en stock.`);
+      toast.error(`Stock insuffisant. Il ne reste que ${med.stock_actuel} unité(s) en stock.`);
       return;
     }
 
@@ -134,7 +164,7 @@ export default function PharmacieHubPage() {
       .eq('id', med.id);
 
     if (stockErr) {
-      alert("Erreur lors de la mise à jour du stock.");
+      toast.error("Erreur lors de la mise à jour du stock.");
       setDispensing(null);
       return;
     }
@@ -146,14 +176,94 @@ export default function PharmacieHubPage() {
       .eq('id', prescriptionId);
 
     if (presErr) {
-      alert("Erreur lors de la mise à jour de la prescription.");
+      toast.error("Erreur lors de la mise à jour de la prescription.");
       setDispensing(null);
       return;
     }
 
+    // 3. Traçabilité du mouvement (ignoré si la table n'existe pas encore)
+    await supabase.from('mouvements_stock').insert([{
+      medicament_id: med.id,
+      type: 'sortie',
+      quantite: -qty,
+      stock_avant: med.stock_actuel,
+      stock_apres: newStock,
+      motif: 'Délivrance sur ordonnance',
+      prescription_id: prescriptionId,
+      auteur_id: profile?.id || null,
+    }]);
+
+    toast.success(`${qty} unité(s) de ${med.nom_commercial} délivrée(s).`);
     // Refresh
     await loadData();
     setDispensing(null);
+  };
+
+  const openStockForm = (med: Medicament, type: StockForm['type'] = 'entrée') => {
+    setStockForm({
+      med,
+      type,
+      quantite: 0,
+      motif: '',
+      reference: '',
+      fournisseur: med.fournisseur || '',
+      date_peremption: med.date_peremption || '',
+    });
+  };
+
+  const handleStockSubmit = async () => {
+    if (!stockForm) return;
+    const { med, type } = stockForm;
+    const q = Math.floor(Number(stockForm.quantite) || 0);
+    if (type !== 'ajustement' && q <= 0) {
+      toast.error('Saisissez une quantité supérieure à zéro.');
+      return;
+    }
+    if (type === 'ajustement' && q < 0) {
+      toast.error('Le stock compté ne peut pas être négatif.');
+      return;
+    }
+    if (type === 'péremption' && q > med.stock_actuel) {
+      toast.error(`Impossible de retirer plus que le stock actuel (${med.stock_actuel}).`);
+      return;
+    }
+
+    const stockApres = type === 'entrée' ? med.stock_actuel + q : type === 'ajustement' ? q : med.stock_actuel - q;
+    const delta = stockApres - med.stock_actuel;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const peremption = type === 'entrée' && stockForm.date_peremption ? stockForm.date_peremption : med.date_peremption;
+    const expired = peremption ? new Date(peremption) < today : false;
+    const statut = stockApres <= 0 ? 'rupture' : expired ? 'expiré' : 'disponible';
+
+    setSavingStock(true);
+    const patch: Record<string, unknown> = { stock_actuel: stockApres, statut };
+    if (type === 'entrée') {
+      if (stockForm.fournisseur.trim()) patch.fournisseur = stockForm.fournisseur.trim();
+      if (stockForm.date_peremption) patch.date_peremption = stockForm.date_peremption;
+    }
+    const { error } = await supabase.from('medicaments').update(patch).eq('id', med.id);
+    if (error) {
+      setSavingStock(false);
+      toast.error(explainDbError(error));
+      return;
+    }
+    const defaultMotif = type === 'entrée' ? 'Réapprovisionnement' : type === 'ajustement' ? 'Inventaire physique' : 'Retrait de produits périmés / avariés';
+    const { error: mvtError } = await supabase.from('mouvements_stock').insert([{
+      medicament_id: med.id,
+      type,
+      quantite: delta,
+      stock_avant: med.stock_actuel,
+      stock_apres: stockApres,
+      motif: stockForm.motif.trim() || defaultMotif,
+      reference: stockForm.reference.trim() || null,
+      auteur_id: profile?.id || null,
+    }]);
+    setSavingStock(false);
+    if (mvtError) toast.error(`Stock mis à jour, mais le mouvement n'a pas été tracé : ${explainDbError(mvtError)}`);
+    else toast.success(`Stock de ${med.nom_commercial} : ${med.stock_actuel} → ${stockApres}`);
+    setStockForm(null);
+    loadData();
   };
 
   // --- RENDERS ---
@@ -221,6 +331,13 @@ export default function PharmacieHubPage() {
           style={{ padding: '12px 0', fontWeight: 600, color: activeTab === 'inventaire' ? 'var(--primary-600)' : 'var(--neutral-500)', borderBottom: activeTab === 'inventaire' ? '2px solid var(--primary-600)' : 'none', display: 'flex', alignItems: 'center', gap: 8, background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' }}
         >
           <Package size={18} /> Inventaire & Stocks
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'mouvements' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mouvements')}
+          style={{ padding: '12px 0', fontWeight: 600, color: activeTab === 'mouvements' ? 'var(--primary-600)' : 'var(--neutral-500)', borderBottom: activeTab === 'mouvements' ? '2px solid var(--primary-600)' : 'none', display: 'flex', alignItems: 'center', gap: 8, background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' }}
+        >
+          <History size={18} /> Mouvements de stock
         </button>
       </div>
 
@@ -337,6 +454,9 @@ export default function PharmacieHubPage() {
                           {pres.consultations?.patients?.prenom?.[0]}{pres.consultations?.patients?.nom?.[0]}
                         </div>
                         <span style={{ fontSize: 14, fontWeight: 500 }}>Patient: {pres.consultations?.patients?.prenom} {pres.consultations?.patients?.nom}</span>
+                        {pres.consultations?.personnel && (
+                          <span style={{ fontSize: 12, color: 'var(--neutral-500)' }}>• Prescrit par Dr. {pres.consultations.personnel.prenom} {pres.consultations.personnel.nom}</span>
+                        )}
                       </div>
                     </div>
                     
@@ -460,9 +580,14 @@ export default function PharmacieHubPage() {
                             </span>
                           </td>
                           <td>
-                            <Link href={`/pharmacie/${med.id}/edit`} className="btn btn-ghost btn-sm" style={{ padding: '6px 12px' }}>
-                              Éditer
-                            </Link>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)} title="Entrée, ajustement ou retrait de stock">
+                                <PackagePlus size={14} /> Stock
+                              </button>
+                              <Link href={`/pharmacie/${med.id}/edit`} className="btn btn-ghost btn-sm" style={{ padding: '6px 12px' }}>
+                                Éditer
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -506,7 +631,10 @@ export default function PharmacieHubPage() {
                             <Calendar size={12} /> Expire le {new Date(med.date_peremption).toLocaleDateString('fr-FR')}
                           </div>
                         )}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--neutral-100)', paddingTop: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, borderTop: '1px solid var(--neutral-100)', paddingTop: 12 }}>
+                          <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)}>
+                            <PackagePlus size={14} /> Stock
+                          </button>
                           <Link href={`/pharmacie/${med.id}/edit`} className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-600)' }}>
                             Mettre à jour
                           </Link>
@@ -520,6 +648,162 @@ export default function PharmacieHubPage() {
           )}
         </div>
       )}
+
+      {/* TAB: MOUVEMENTS */}
+      {activeTab === 'mouvements' && (
+        <div className="animate-slide-up">
+          {mouvementsError ? (
+            <div className="alert alert-warning"><AlertTriangle size={18} /> {mouvementsError}</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+                <select className="form-select" style={{ width: 220 }} value={mvtFilter} onChange={(e) => setMvtFilter(e.target.value)}>
+                  <option value="tous">Tous les mouvements</option>
+                  {Object.entries(MOUVEMENT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+                <button
+                  className="btn btn-outline"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() => downloadCsv(
+                    `mouvements-stock-${new Date().toISOString().slice(0, 10)}.csv`,
+                    ['Date', 'Médicament', 'Type', 'Quantité', 'Stock avant', 'Stock après', 'Motif', 'Référence', 'Auteur'],
+                    mouvements
+                      .filter((m) => mvtFilter === 'tous' || m.type === mvtFilter)
+                      .map((m) => [formatDateTime(m.created_at), m.medicaments?.nom_commercial, MOUVEMENT_TYPES[m.type]?.label || m.type, m.quantite, m.stock_avant, m.stock_apres, m.motif, m.reference, m.auteur ? `${m.auteur.prenom} ${m.auteur.nom}` : ''])
+                  )}
+                >
+                  <Download size={16} /> Exporter (CSV)
+                </button>
+              </div>
+              {mouvements.filter((m) => mvtFilter === 'tous' || m.type === mvtFilter).length === 0 ? (
+                <div className="card"><div className="card-body"><div className="empty-state">
+                  <Inbox className="empty-state-icon" />
+                  <h3>Aucun mouvement</h3>
+                  <p>Les entrées, sorties et ajustements de stock apparaîtront ici.</p>
+                </div></div></div>
+              ) : (
+                <div className="card">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Médicament</th>
+                        <th>Type</th>
+                        <th style={{ textAlign: 'right' }}>Quantité</th>
+                        <th>Stock</th>
+                        <th>Motif / référence</th>
+                        <th>Par</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mouvements.filter((m) => mvtFilter === 'tous' || m.type === mvtFilter).map((m) => {
+                        const t = statusBadge(MOUVEMENT_TYPES, m.type);
+                        return (
+                          <tr key={m.id}>
+                            <td style={{ fontSize: 13 }}>{formatDateTime(m.created_at)}</td>
+                            <td>
+                              <div style={{ fontWeight: 600 }}>{m.medicaments?.nom_commercial || '—'}</div>
+                              <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>{m.medicaments?.code} {m.medicaments?.dosage}</div>
+                            </td>
+                            <td><span className={`badge ${t.badge}`}>{t.label}</span></td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: m.quantite >= 0 ? 'var(--success-600)' : 'var(--danger-600)' }}>
+                              {m.quantite > 0 ? `+${m.quantite}` : m.quantite}
+                            </td>
+                            <td style={{ fontSize: 13, color: 'var(--neutral-600)' }}>{m.stock_avant ?? '—'} → <strong>{m.stock_apres ?? '—'}</strong></td>
+                            <td style={{ fontSize: 13 }}>
+                              {m.motif || '—'}
+                              {m.reference && <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>Réf. {m.reference}</div>}
+                            </td>
+                            <td style={{ fontSize: 13 }}>{m.auteur ? `${m.auteur.prenom} ${m.auteur.nom}` : '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      <Modal
+        open={!!stockForm}
+        title={stockForm ? `Mouvement de stock — ${stockForm.med.nom_commercial}` : ''}
+        onClose={() => setStockForm(null)}
+        footer={(
+          <>
+            <button className="btn btn-outline" onClick={() => setStockForm(null)}>Annuler</button>
+            <button className="btn btn-primary" onClick={handleStockSubmit} disabled={savingStock}>
+              {savingStock ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />} Enregistrer
+            </button>
+          </>
+        )}
+      >
+        {stockForm && (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              {([
+                ['entrée', 'Réception / entrée'],
+                ['ajustement', 'Inventaire (ajustement)'],
+                ['péremption', 'Retrait périmé / avarié'],
+              ] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={`btn btn-sm ${stockForm.type === k ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setStockForm({ ...stockForm, type: k, quantite: 0 })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="alert alert-info" style={{ marginBottom: 16 }}>
+              Stock actuel : <strong>{stockForm.med.stock_actuel}</strong> unité(s) • seuil minimum {stockForm.med.stock_minimum}
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">
+                  {stockForm.type === 'entrée' ? 'Quantité reçue *' : stockForm.type === 'ajustement' ? 'Stock réellement compté *' : 'Quantité retirée *'}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  className="form-input"
+                  value={stockForm.quantite || ''}
+                  onChange={(e) => setStockForm({ ...stockForm, quantite: parseInt(e.target.value) || 0 })}
+                  autoFocus
+                />
+                {stockForm.quantite > 0 || stockForm.type === 'ajustement' ? (
+                  <p className="form-help">
+                    Nouveau stock : <strong>{stockForm.type === 'entrée' ? stockForm.med.stock_actuel + stockForm.quantite : stockForm.type === 'ajustement' ? stockForm.quantite : stockForm.med.stock_actuel - stockForm.quantite}</strong>
+                  </p>
+                ) : null}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Référence (bon de livraison, lot...)</label>
+                <input className="form-input" value={stockForm.reference} onChange={(e) => setStockForm({ ...stockForm, reference: e.target.value })} />
+              </div>
+            </div>
+            {stockForm.type === 'entrée' && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Fournisseur</label>
+                  <input className="form-input" value={stockForm.fournisseur} onChange={(e) => setStockForm({ ...stockForm, fournisseur: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Date de péremption du lot</label>
+                  <input type="date" className="form-input" value={stockForm.date_peremption} onChange={(e) => setStockForm({ ...stockForm, date_peremption: e.target.value })} />
+                </div>
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label">Motif / commentaire</label>
+              <input className="form-input" value={stockForm.motif} onChange={(e) => setStockForm({ ...stockForm, motif: e.target.value })} placeholder="Optionnel" />
+            </div>
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

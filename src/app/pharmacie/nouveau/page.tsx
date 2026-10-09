@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function NouveauMedicamentPage() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function NouveauMedicamentPage() {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const { confirm } = useConfirm();
+  const { profile } = useAuth();
   
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -56,10 +58,23 @@ export default function NouveauMedicamentPage() {
     };
 
     try {
-      const { error } = await supabase.from('medicaments').insert([data]);
+      const { data: created, error } = await supabase.from('medicaments').insert([data]).select('id').single();
 
       if (error) {
         throw error;
+      }
+
+      // Stock initial tracé comme première entrée (ignoré si la table n'existe pas encore)
+      if (created && stock_actuel > 0) {
+        await supabase.from('mouvements_stock').insert([{
+          medicament_id: created.id,
+          type: 'entrée',
+          quantite: stock_actuel,
+          stock_avant: 0,
+          stock_apres: stock_actuel,
+          motif: 'Stock initial',
+          auteur_id: profile?.id || null,
+        }]);
       }
       
       router.push('/pharmacie');

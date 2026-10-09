@@ -15,6 +15,8 @@ export interface Patient {
   assureur?: string;
   contact_urgence_nom?: string;
   contact_urgence_tel?: string;
+  allergies?: string | null;
+  antecedents?: string | null;
   statut: 'actif' | 'inactif' | 'décédé';
   created_at: string;
   updated_at: string;
@@ -234,6 +236,86 @@ export interface Chambre {
   etage: string;
   type: 'individuelle' | 'double' | 'commune';
   capacite: number;
+}
+
+// ===== Laboratoire =====
+export type StatutAnalyse = 'demandé' | 'prélevé' | 'en_cours' | 'terminé' | 'annulé';
+
+export interface ParametreAnalyse {
+  nom: string;
+  valeur: string;
+  unite?: string;
+  reference?: string;
+  anormal?: boolean;
+}
+
+export interface AnalyseLaboratoire {
+  id: string;
+  patient_id: string;
+  medecin_prescripteur_id?: string | null;
+  technicien_id?: string | null;
+  consultation_id?: string | null;
+  type_analyse: string;
+  description?: string | null;
+  resultats?: { parametres?: ParametreAnalyse[]; texte?: string } | null;
+  statut: StatutAnalyse;
+  urgent?: boolean;
+  date_demande: string;
+  date_prelevement?: string | null;
+  date_resultat?: string | null;
+  observations?: string | null;
+  created_at: string;
+}
+
+// ===== Suivi d'hospitalisation =====
+export interface SuiviHospitalisation {
+  id: string;
+  hospitalisation_id: string;
+  auteur_id?: string | null;
+  type: 'observation' | 'soin' | 'constantes' | 'visite' | 'incident';
+  constantes?: Record<string, string> | null;
+  note?: string | null;
+  date_suivi: string;
+  created_at: string;
+}
+
+// ===== Pharmacie : mouvements de stock =====
+export interface MouvementStock {
+  id: string;
+  medicament_id: string;
+  type: 'entrée' | 'sortie' | 'ajustement' | 'péremption';
+  quantite: number;
+  stock_avant?: number | null;
+  stock_apres?: number | null;
+  motif?: string | null;
+  reference?: string | null;
+  prescription_id?: string | null;
+  auteur_id?: string | null;
+  created_at: string;
+}
+
+// ===== Catalogue des actes =====
+export interface ActeTarif {
+  id: string;
+  code: string;
+  libelle: string;
+  categorie: 'consultation' | 'hospitalisation' | 'laboratoire' | 'imagerie' | 'soin' | 'chirurgie' | 'pharmacie' | 'autre';
+  prix: number;
+  actif: boolean;
+  created_at: string;
+}
+
+// ===== Journal d'audit =====
+export interface AuditLog {
+  id: number;
+  user_id?: string | null;
+  user_email?: string | null;
+  action: string;
+  table_name: string;
+  record_id?: string | null;
+  old_values?: Record<string, unknown> | null;
+  new_values?: Record<string, unknown> | null;
+  timestamp: string;
 }
 
 // ===== Dashboard Stats =====

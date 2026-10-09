@@ -7,13 +7,16 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
+import MedicalAlerts from '@/components/patients/MedicalAlerts';
+import ClinicalFields, { readClinicalForm } from '@/components/consultations/ClinicalFields';
+import { explainDbError } from '@/lib/format';
 
 export default function EditConsultationPage() {
   const router = useRouter();
   const { id } = useParams();
   const { profile } = useAuth();
   const { confirm } = useConfirm();
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [consultation, setConsultation] = useState<any>(null);
@@ -21,18 +24,12 @@ export default function EditConsultationPage() {
   useEffect(() => {
     async function fetchDetails() {
       if (!id) return;
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('consultations')
-        .select(`
-          *,
-          patients (id, nom, prenom, code_patient)
-        `)
+        .select('*, patients (id, nom, prenom, code_patient)')
         .eq('id', id)
         .single();
-        
-      if (data) {
-        setConsultation(data);
-      }
+      if (data) setConsultation(data);
       setLoading(false);
     }
     fetchDetails();
@@ -41,59 +38,34 @@ export default function EditConsultationPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
+
+    if (!profile) {
+      toast.error('Médecin non identifié. Veuillez vous reconnecter.');
+      return;
+    }
+
     const isConfirmed = await confirm({
       title: 'Modifier la consultation',
       message: 'Confirmez-vous la mise à jour de ce dossier de consultation ?',
       confirmText: 'Oui, modifier',
-      type: 'info'
+      type: 'info',
     });
-
     if (!isConfirmed) return;
 
     setSaving(true);
-    
-    if (!profile) {
-      toast.error("Médecin non identifié. Veuillez vous reconnecter.");
+    const { error } = await supabase
+      .from('consultations')
+      .update(readClinicalForm(formData))
+      .eq('id', id);
+
+    if (error) {
+      console.error(error);
+      toast.error(`Erreur de mise à jour : ${explainDbError(error)}`);
       setSaving(false);
       return;
     }
-
-
-    
-    const constantes = {
-      poids: formData.get('poids') as string,
-      temperature: formData.get('temperature') as string,
-      tension: formData.get('tension') as string,
-    };
-
-    const dataToUpdate = {
-      motif: formData.get('motif') as string,
-      diagnostic_principal: (formData.get('diagnostic_principal') as string) || null,
-      notes_privees: (formData.get('notes') as string) || null,
-      constantes: constantes,
-      statut: formData.get('statut') as string,
-    };
-
-    try {
-      const { error } = await supabase
-        .from('consultations')
-        .update(dataToUpdate)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-      toast.success("Consultation mise à jour avec succès !");
-      router.refresh();
-      router.push(`/consultations/${id}`);
-    } catch (err: any) {
-      console.error(err);
-      toast.error(`Erreur de mise à jour: ${err.message}`);
-      setSaving(false);
-    }
+    toast.success('Consultation mise à jour avec succès !');
+    router.push(`/consultations/${id}`);
   };
 
   if (loading) {
@@ -121,61 +93,16 @@ export default function EditConsultationPage() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="page-title">Modifier la Consultation</h1>
-            <p className="page-subtitle">Patient : {consultation.patients?.prenom} {consultation.patients?.nom}</p>
+            <h1 className="page-title">Modifier la consultation</h1>
+            <p className="page-subtitle">Patient : {consultation.patients?.prenom} {consultation.patients?.nom} ({consultation.patients?.code_patient})</p>
           </div>
         </div>
       </div>
 
+      <MedicalAlerts patientId={consultation.patient_id} />
+
       <form onSubmit={handleSubmit}>
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-header"><span className="card-title">Constantes Vitales</span></div>
-          <div className="card-body">
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Poids (kg)</label>
-                <input type="text" name="poids" defaultValue={consultation.constantes?.poids || ''} className="form-input" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Température (°C)</label>
-                <input type="text" name="temperature" defaultValue={consultation.constantes?.temperature || ''} className="form-input" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Tension artérielle</label>
-                <input type="text" name="tension" defaultValue={consultation.constantes?.tension || ''} className="form-input" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-header"><span className="card-title">Évaluation Clinique</span></div>
-          <div className="card-body">
-            <div className="form-group">
-              <label className="form-label">Motif de consultation *</label>
-              <input type="text" name="motif" defaultValue={consultation.motif} className="form-input" required />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Diagnostic principal</label>
-              <input type="text" name="diagnostic_principal" defaultValue={consultation.diagnostic_principal || ''} className="form-input" />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Notes cliniques et traitement prescrit</label>
-              <textarea name="notes" defaultValue={consultation.notes_privees || ''} className="form-textarea" rows={6}></textarea>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Statut de la consultation</label>
-              <select name="statut" className="form-select" defaultValue={consultation.statut}>
-                <option value="en_cours">En cours (En attente d'examens)</option>
-                <option value="terminée">Terminée</option>
-                <option value="annulée">Annulée</option>
-              </select>
-            </div>
-          </div>
-        </div>
+        <ClinicalFields defaults={consultation} allowCancel />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
           <button type="button" onClick={() => router.back()} className="btn btn-outline">Annuler</button>

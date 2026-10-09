@@ -113,7 +113,7 @@ export default function EditHospitalisationPage() {
         }
       }
 
-      router.push('/hospitalisation');
+      router.push(`/hospitalisation/${id}`);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
@@ -146,7 +146,7 @@ export default function EditHospitalisationPage() {
     <div className="animate-fade-in">
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button onClick={() => router.back()} className="btn btn-ghost" title="Retour">
+          <button onClick={() => router.push(`/hospitalisation/${id}`)} className="btn btn-ghost" title="Retour">
             <ArrowLeft size={18} />
           </button>
           <div>

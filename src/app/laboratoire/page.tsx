@@ -1,61 +1,80 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   FlaskConical,
   Plus,
   Clock,
   CheckCircle,
-  AlertCircle,
   Loader2,
   Inbox,
+  Search,
+  Microscope,
+  RefreshCw,
+  AlertTriangle,
+  Eye,
 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import { LAB_STATUTS, statusBadge, formatDate, formatTime, explainDbError } from '@/lib/format';
 
-const statutConfig: Record<string, { label: string; class: string; icon: React.ReactNode }> = {
-  'demandé': { label: 'Demandé', class: 'badge-neutral', icon: <Clock size={12} /> },
-  'prélevé': { label: 'Prélevé', class: 'badge-info', icon: <FlaskConical size={12} /> },
-  'en_traitement': { label: 'En traitement', class: 'badge-warning', icon: <AlertCircle size={12} /> },
-  'validé': { label: 'Validé', class: 'badge-success', icon: <CheckCircle size={12} /> },
-};
+const TABS = [
+  { key: 'actifs', label: 'À traiter' },
+  { key: 'demandé', label: 'Demandés' },
+  { key: 'prélevé', label: 'Prélevés' },
+  { key: 'en_cours', label: 'En analyse' },
+  { key: 'terminé', label: 'Résultats' },
+  { key: 'tous', label: 'Tous' },
+];
 
 export default function LaboratoirePage() {
   const [analyses, setAnalyses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState('');
   const [search, setSearch] = useState('');
-  const [filterStatut, setFilterStatut] = useState('tous');
+  const [tab, setTab] = useState('actifs');
 
-  useEffect(() => {
-    async function fetchAnalyses() {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('analyses_laboratoire')
-        .select('*, patients(nom, prenom, code_patient), personnel!analyses_laboratoire_medecin_prescripteur_id_fkey(nom, prenom)')
-        .order('date_demande', { ascending: false });
+  const fetchAnalyses = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('analyses_laboratoire')
+      .select('*, patients(nom, prenom, code_patient), personnel!analyses_laboratoire_medecin_prescripteur_id_fkey(nom, prenom)')
+      .order('date_demande', { ascending: false });
 
-      if (error) {
-        console.error('Erreur:', error);
-      } else {
-        setAnalyses(data || []);
-      }
-      setLoading(false);
+    if (error) {
+      console.error('Erreur:', error);
+      setDbError(explainDbError(error));
+      toast.error('Impossible de charger les analyses.');
+    } else {
+      setDbError('');
+      setAnalyses(data || []);
     }
-    fetchAnalyses();
+    setLoading(false);
   }, []);
 
+  useEffect(() => {
+    fetchAnalyses();
+  }, [fetchAnalyses]);
+
+  const count = (statut: string) => analyses.filter((a) => a.statut === statut).length;
+
   const filtered = analyses.filter((a) => {
-    const matchSearch = search === '' ||
-      a.patients?.nom.toLowerCase().includes(search.toLowerCase()) ||
-      a.type_analyse.toLowerCase().includes(search.toLowerCase());
-    const matchStatut = filterStatut === 'tous' || a.statut === filterStatut;
-    return matchSearch && matchStatut;
+    const q = search.toLowerCase();
+    const matchSearch = q === '' ||
+      `${a.patients?.prenom || ''} ${a.patients?.nom || ''}`.toLowerCase().includes(q) ||
+      (a.patients?.code_patient || '').toLowerCase().includes(q) ||
+      (a.type_analyse || '').toLowerCase().includes(q);
+    const matchTab =
+      tab === 'tous' ||
+      (tab === 'actifs' ? ['demandé', 'prélevé', 'en_cours'].includes(a.statut) : a.statut === tab);
+    return matchSearch && matchTab;
   });
 
-  const totalDemandes = analyses.length;
-  const enAttente = analyses.filter(a => a.statut === 'demandé').length;
-  const enCours = analyses.filter(a => a.statut === 'en_cours').length;
-  const termines = analyses.filter(a => a.statut === 'terminé').length;
+  // Les demandes urgentes passent en tête des listes de travail
+  const sorted = tab === 'terminé' || tab === 'tous'
+    ? filtered
+    : [...filtered].sort((a, b) => Number(!!b.urgent) - Number(!!a.urgent));
 
   if (loading) {
     return (
@@ -66,26 +85,38 @@ export default function LaboratoirePage() {
     );
   }
 
+  const stats = [
+    { label: 'Demandés', count: count('demandé'), color: 'blue', icon: <Clock size={22} /> },
+    { label: 'Prélevés', count: count('prélevé'), color: 'purple', icon: <FlaskConical size={22} /> },
+    { label: 'En analyse', count: count('en_cours'), color: 'orange', icon: <Microscope size={22} /> },
+    { label: 'Résultats disponibles', count: count('terminé'), color: 'green', icon: <CheckCircle size={22} /> },
+  ];
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
         <div>
           <h1 className="page-title">Laboratoire</h1>
-          <p className="page-subtitle">Analyses biologiques et résultats</p>
+          <p className="page-subtitle">Demandes d&apos;examens, prélèvements et résultats</p>
         </div>
-        <Link href="/laboratoire/nouveau" className="btn btn-primary">
-          <Plus size={16} /> Nouvelle Analyse
-        </Link>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={fetchAnalyses} className="btn btn-outline" title="Actualiser">
+            <RefreshCw size={16} /> Actualiser
+          </button>
+          <Link href="/laboratoire/nouveau" className="btn btn-primary">
+            <Plus size={16} /> Nouvelle demande
+          </Link>
+        </div>
       </div>
 
-      {/* Workflow Stats */}
+      {dbError && (
+        <div className="alert alert-danger" style={{ marginBottom: 20 }}>
+          <AlertTriangle size={18} /> {dbError}
+        </div>
+      )}
+
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
-        {[
-          { label: 'Demandés', count: 0, color: 'blue', icon: <Clock size={22} /> },
-          { label: 'Prélevés', count: 0, color: 'purple', icon: <FlaskConical size={22} /> },
-          { label: 'En traitement', count: 0, color: 'orange', icon: <AlertCircle size={22} /> },
-          { label: 'Validés', count: 0, color: 'green', icon: <CheckCircle size={22} /> },
-        ].map((stat) => (
+        {stats.map((stat) => (
           <div key={stat.label} className="stat-card">
             <div className={`stat-card-icon ${stat.color}`}>{stat.icon}</div>
             <div className="stat-card-info">
@@ -96,17 +127,40 @@ export default function LaboratoirePage() {
         ))}
       </div>
 
-      {/* Data Table */}
-      {filtered.length === 0 ? (
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">🔬 Demandes d&apos;analyses</span>
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-body" style={{ padding: '14px 22px' }}>
+          <div className="header-search" style={{ width: '100%' }}>
+            <Search className="header-search-icon" />
+            <input
+              type="text"
+              placeholder="Rechercher par patient, code patient ou type d'examen..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
+        </div>
+      </div>
+
+      <div className="tabs">
+        {TABS.map((t) => {
+          const n = t.key === 'tous' ? analyses.length
+            : t.key === 'actifs' ? analyses.filter((a) => ['demandé', 'prélevé', 'en_cours'].includes(a.statut)).length
+            : count(t.key);
+          return (
+            <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+              {t.label} ({n})
+            </button>
+          );
+        })}
+      </div>
+
+      {sorted.length === 0 ? (
+        <div className="card">
           <div className="card-body">
             <div className="empty-state">
               <Inbox className="empty-state-icon" />
-              <h3>Aucune demande d&apos;analyse</h3>
-              <p>Les demandes d&apos;analyses apparaîtront ici lorsqu&apos;elles seront créées.</p>
+              <h3>Aucune analyse</h3>
+              <p>Aucune demande d&apos;analyse ne correspond à cette sélection.</p>
             </div>
           </div>
         </div>
@@ -115,30 +169,43 @@ export default function LaboratoirePage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Date</th>
+                <th>Demande</th>
                 <th>Patient</th>
+                <th>Examen</th>
                 <th>Prescripteur</th>
-                <th>Type d'analyse</th>
                 <th>Statut</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((analyse) => (
-                <tr key={analyse.id}>
-                  <td>{new Date(analyse.date_demande).toLocaleDateString('fr-FR')}</td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{analyse.patients?.prenom} {analyse.patients?.nom}</div>
-                    <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>{analyse.patients?.code_patient}</div>
-                  </td>
-                  <td>Dr. {analyse.personnel?.prenom} {analyse.personnel?.nom}</td>
-                  <td>{analyse.type_analyse}</td>
-                  <td><span className={`badge ${statutConfig[analyse.statut]?.class || 'badge-neutral'}`}>{analyse.statut}</span></td>
-                  <td>
-                    <Link href={`/laboratoire/${analyse.id}/edit`} className="btn btn-outline btn-sm">Saisir Résultat</Link>
-                  </td>
-                </tr>
-              ))}
+              {sorted.map((analyse) => {
+                const st = statusBadge(LAB_STATUTS, analyse.statut);
+                return (
+                  <tr key={analyse.id}>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{formatDate(analyse.date_demande)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--neutral-500)' }}>{formatTime(analyse.date_demande)}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{analyse.patients?.prenom} {analyse.patients?.nom}</div>
+                      <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>{analyse.patients?.code_patient}</div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {analyse.type_analyse}
+                        {analyse.urgent && <span className="badge badge-danger">Urgent</span>}
+                      </div>
+                    </td>
+                    <td>{analyse.personnel ? `Dr. ${analyse.personnel.prenom} ${analyse.personnel.nom}` : '—'}</td>
+                    <td><span className={`badge ${st.badge}`}>{st.label}</span></td>
+                    <td>
+                      <Link href={`/laboratoire/${analyse.id}`} className="btn btn-outline btn-sm">
+                        <Eye size={14} /> {analyse.statut === 'terminé' || analyse.statut === 'annulé' ? 'Consulter' : 'Traiter'}
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

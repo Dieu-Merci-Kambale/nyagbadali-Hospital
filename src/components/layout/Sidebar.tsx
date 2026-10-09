@@ -20,6 +20,9 @@ import {
   LogOut,
   PanelLeftClose,
   PanelRightOpen,
+  Building2,
+  BarChart3,
+  ScrollText,
 } from 'lucide-react';
 
 // =====================================================
@@ -44,7 +47,10 @@ const allNavItems: NavItemConfig[] = [
   { module: 'pharmacie', label: 'Pharmacie', href: '/pharmacie', icon: <Pill size={20} />, section: 'Support Médical' },
   { module: 'laboratoire', label: 'Laboratoire', href: '/laboratoire', icon: <FlaskConical size={20} />, section: 'Support Médical' },
   { module: 'personnel', label: 'Personnel', href: '/personnel', icon: <UserCog size={20} />, section: 'Administration' },
+  { module: 'departements', label: 'Départements', href: '/departements', icon: <Building2 size={20} />, section: 'Administration' },
   { module: 'facturation', label: 'Facturation', href: '/facturation', icon: <Receipt size={20} />, section: 'Administration' },
+  { module: 'rapports', label: 'Rapports & Statistiques', href: '/rapports', icon: <BarChart3 size={20} />, section: 'Pilotage' },
+  { module: 'audit', label: "Journal d'activité", href: '/audit', icon: <ScrollText size={20} />, section: 'Pilotage' },
 ];
 
 export default function Sidebar({

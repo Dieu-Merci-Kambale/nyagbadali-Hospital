@@ -2,106 +2,121 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeft, Save, AlertCircle, Loader2, Lock } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import { useConfirm } from '@/context/ConfirmContext';
+import InvoiceLinesEditor, { InvoiceTotals } from '@/components/facturation/InvoiceLinesEditor';
+import { fetchActes, newLine, type InvoiceLine } from '@/lib/invoice';
+import { formatMoney, explainDbError } from '@/lib/format';
+import type { ActeTarif } from '@/types';
 
 export default function EditFacturePage() {
   const router = useRouter();
   const { id } = useParams();
-  
+  const { confirm } = useConfirm();
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  
   const [facture, setFacture] = useState<any>(null);
+  const [actes, setActes] = useState<ActeTarif[]>([]);
+  const [lignes, setLignes] = useState<InvoiceLine[]>([newLine()]);
+  const [tauxAssurance, setTauxAssurance] = useState(0);
 
   useEffect(() => {
     async function fetchData() {
       if (!id) return;
-      const { data, error } = await supabase
-        .from('factures')
-        .select(`
-          *,
-          patients(nom, prenom, code_patient),
-          lignes_facture(id, description),
-          paiements(montant)
-        `)
-        .eq('id', id)
-        .single();
-        
-      if (error) {
+      const [{ data, error }, catalogue] = await Promise.all([
+        supabase
+          .from('factures')
+          .select('*, patients(nom, prenom, code_patient), lignes_facture(id, description, code_acte, quantite, prix_unitaire, montant), paiements(id)')
+          .eq('id', id)
+          .single(),
+        fetchActes(),
+      ]);
+
+      if (error || !data) {
         setErrorMsg('Facture introuvable.');
       } else {
-        const montant_paye = data.paiements?.reduce((acc: number, p: any) => acc + p.montant, 0) || 0;
-        const description = data.lignes_facture && data.lignes_facture.length > 0 ? data.lignes_facture[0].description : '';
-        setFacture({ ...data, montant_paye, description, ligne_id: data.lignes_facture?.[0]?.id });
+        setFacture(data);
+        setActes(catalogue);
+        const existing = (data.lignes_facture || []).map((l: any) => newLine({
+          description: l.description,
+          code_acte: l.code_acte || '',
+          quantite: Number(l.quantite) || 1,
+          prix_unitaire: Number(l.prix_unitaire) || 0,
+        }));
+        setLignes(existing.length ? existing : [newLine()]);
+        const total = Number(data.montant_total) || 0;
+        setTauxAssurance(total > 0 ? Math.round((Number(data.montant_assurance || 0) / total) * 100) : 0);
       }
       setLoading(false);
     }
     fetchData();
   }, [id]);
 
+  const lignesValides = lignes.filter((l) => l.description.trim() !== '');
+  const total = lignesValides.reduce((acc, l) => acc + l.quantite * l.prix_unitaire, 0);
+  const montantAssurance = Math.round((total * tauxAssurance) / 100);
+  const montantPatient = total - montantAssurance;
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (total <= 0) {
+      setErrorMsg('Le montant total ne peut pas être nul.');
+      return;
+    }
+    const ok = await confirm({
+      title: 'Modifier la facture',
+      message: `Le nouveau montant sera de ${formatMoney(total)} (net patient : ${formatMoney(montantPatient)}). Confirmer ?`,
+      confirmText: 'Oui, enregistrer',
+      type: 'info',
+    });
+    if (!ok) return;
+
     setSaving(true);
     setErrorMsg('');
-    
-    const formData = new FormData(e.currentTarget);
-    const montantTotal = parseFloat(formData.get('montant_total') as string);
-    const montantAssurance = parseFloat(formData.get('montant_assurance') as string) || 0;
-    const montantPatient = montantTotal - montantAssurance;
-    
-    const montantPaye = parseFloat(formData.get('montant_paye') as string) || 0;
-    
-    let statut = 'en_attente';
-    if (montantPaye >= montantPatient) {
-      statut = 'payée';
-    } else if (montantPaye > 0) {
-      statut = 'partielle';
-    }
-    
-    // Allow manual override if needed, but normally it's calculated
-    const manualStatut = formData.get('statut') as string;
-    if (manualStatut === 'annulée') {
-      statut = 'annulée';
-    }
 
-    const description = formData.get('description') as string;
-
-    const data = {
-      montant_total: montantTotal,
+    const { error } = await supabase.from('factures').update({
+      montant_total: total,
       montant_assurance: montantAssurance,
       montant_patient: montantPatient,
-      statut,
-    };
-
-    try {
-      // 1. Update Facture
-      const { error } = await supabase.from('factures').update(data).eq('id', id);
-
-      if (error) {
-        throw error;
-      }
-
-      // 2. Update Description in lignes_facture
-      if (facture.ligne_id) {
-        await supabase.from('lignes_facture').update({ description, montant: montantTotal, prix_unitaire: montantTotal }).eq('id', facture.ligne_id);
-      } else {
-        await supabase.from('lignes_facture').insert([{ facture_id: id, description, quantite: 1, prix_unitaire: montantTotal, montant: montantTotal, couvert_assurance: false }]);
-      }
-
-      // 3. Add new paiement if montant_paye increased
-      const diff = montantPaye - facture.montant_paye;
-      if (diff > 0) {
-        await supabase.from('paiements').insert([{ facture_id: id, montant: diff, mode_paiement: 'cash', date_paiement: new Date().toISOString() }]);
-      }
-
-      router.push('/facturation');
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      statut: montantPatient === 0 ? 'payée' : 'en_attente',
+    }).eq('id', id);
+    if (error) {
+      setErrorMsg(explainDbError(error));
       setSaving(false);
+      return;
     }
+
+    // Remplacement complet des lignes
+    const { error: delError } = await supabase.from('lignes_facture').delete().eq('facture_id', id);
+    if (delError) {
+      setErrorMsg(`Impossible de mettre à jour les lignes : ${delError.message}`);
+      setSaving(false);
+      return;
+    }
+    const { error: insError } = await supabase.from('lignes_facture').insert(
+      lignesValides.map((l) => ({
+        facture_id: id,
+        description: l.description.trim(),
+        code_acte: l.code_acte || null,
+        quantite: l.quantite,
+        prix_unitaire: l.prix_unitaire,
+        montant: l.quantite * l.prix_unitaire,
+        couvert_assurance: tauxAssurance > 0,
+      }))
+    );
+    if (insError) {
+      setErrorMsg(`Lignes non enregistrées : ${insError.message}`);
+      setSaving(false);
+      return;
+    }
+
+    toast.success('Facture mise à jour.');
+    router.push(`/facturation/${id}`);
   };
 
   if (loading) {
@@ -123,19 +138,31 @@ export default function EditFacturePage() {
     );
   }
 
+  const locked = (facture.paiements || []).length > 0 || facture.statut === 'annulée';
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button onClick={() => router.back()} className="btn btn-ghost" title="Retour">
+          <button onClick={() => router.push(`/facturation/${id}`)} className="btn btn-ghost" title="Retour">
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="page-title">Gérer la Facture</h1>
-            <p className="page-subtitle">Patient: {facture.patients?.prenom} {facture.patients?.nom}</p>
+            <h1 className="page-title">Modifier la facture {facture.numero_facture}</h1>
+            <p className="page-subtitle">Patient : {facture.patients?.prenom} {facture.patients?.nom} ({facture.patients?.code_patient})</p>
           </div>
         </div>
       </div>
+
+      {locked && (
+        <div className="alert alert-warning" style={{ marginBottom: 20 }}>
+          <Lock size={18} />
+          {facture.statut === 'annulée'
+            ? 'Cette facture est annulée et ne peut plus être modifiée.'
+            : 'Des paiements ont déjà été encaissés sur cette facture : elle ne peut plus être modifiée. Établissez une facture complémentaire si nécessaire.'}
+          <Link href={`/facturation/${id}`} style={{ marginLeft: 'auto', fontWeight: 600 }}>Retour à la facture →</Link>
+        </div>
+      )}
 
       {errorMsg && (
         <div className="alert alert-danger" style={{ marginBottom: 20 }}>
@@ -143,71 +170,40 @@ export default function EditFacturePage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ maxWidth: 800 }}>
+      <form onSubmit={handleSubmit}>
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-body">
-            
-            <div className="form-group">
-              <label className="form-label">Détails des prestations *</label>
-              <textarea name="description" className="form-textarea" rows={3} required defaultValue={facture.description || ''}></textarea>
+            <div className="form-group" style={{ maxWidth: 320, marginBottom: 0 }}>
+              <label className="form-label">Taux de couverture assurance (%)</label>
+              <input
+                type="number"
+                className="form-input"
+                min="0"
+                max="100"
+                value={tauxAssurance}
+                disabled={locked}
+                onChange={(e) => setTauxAssurance(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+              />
             </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Montant Total Brut (FC) *</label>
-                <input type="number" name="montant_total" className="form-input" min="0" step="50" required defaultValue={facture.montant_total} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Prise en charge Assurance (FC)</label>
-                <input type="number" name="montant_assurance" className="form-input" min="0" step="50" defaultValue={facture.montant_assurance || 0} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Montant Payé (FC)</label>
-                <input type="number" name="montant_paye" className="form-input" min="0" step="50" defaultValue={facture.montant_paye || 0} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Statut (Forcer l'annulation)</label>
-                <select name="statut" className="form-select" defaultValue={facture.statut}>
-                  <option value={facture.statut}>Calcul Automatique ({facture.statut})</option>
-                  <option value="annulée">Annuler la facture</option>
-                </select>
-              </div>
-            </div>
-            
-            <div style={{ padding: '16px', background: 'var(--neutral-50)', borderRadius: '8px', border: '1px solid var(--neutral-200)', marginTop: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ color: 'var(--neutral-600)' }}>Total Brut :</span>
-                <span style={{ fontWeight: 600 }}>{facture.montant_total} FC</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ color: 'var(--neutral-600)' }}>Prise en charge :</span>
-                <span style={{ fontWeight: 600 }}>- {facture.montant_assurance || 0} FC</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, marginTop: 8, borderTop: '1px solid var(--neutral-200)', paddingTop: 8 }}>
-                <span style={{ color: 'var(--neutral-600)' }}>Net à payer (Patient) :</span>
-                <span style={{ fontWeight: 600 }}>{facture.montant_patient} FC</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ color: 'var(--success)' }}>Déjà payé :</span>
-                <span style={{ fontWeight: 600, color: 'var(--success)' }}>{facture.montant_paye || 0} FC</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--neutral-200)', paddingTop: 8, fontSize: 16, fontWeight: 700 }}>
-                <span>Reste à payer :</span>
-                <span style={{ color: facture.montant_patient - (facture.montant_paye || 0) > 0 ? 'var(--danger)' : 'var(--neutral-800)' }}>
-                  {facture.montant_patient - (facture.montant_paye || 0)} FC
-                </span>
-              </div>
-            </div>
-
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-          <button type="button" onClick={() => router.back()} className="btn btn-outline">Annuler</button>
-          <button type="submit" className="btn btn-primary btn-lg" disabled={saving}>
-            {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} Mettre à jour
-          </button>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header"><span className="card-title">Détail des actes & prestations</span></div>
+          <div className="card-body" style={{ padding: 0 }}>
+            <InvoiceLinesEditor lines={lignes} onChange={setLignes} actes={actes} disabled={locked} />
+            <InvoiceTotals total={total} tauxAssurance={tauxAssurance} montantAssurance={montantAssurance} />
+          </div>
         </div>
+
+        {!locked && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <button type="button" onClick={() => router.push(`/facturation/${id}`)} className="btn btn-outline">Annuler</button>
+            <button type="submit" className="btn btn-primary btn-lg" disabled={saving}>
+              {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} Enregistrer les modifications
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

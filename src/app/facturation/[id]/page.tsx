@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Loader2, AlertCircle, Printer, CreditCard, CheckCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Printer, CreditCard, CheckCircle, Clock, FileText, Edit, Ban } from 'lucide-react';
+import Link from 'next/link';
+import { downloadInvoicePdf } from '@/lib/invoice';
+import { FACTURE_STATUTS, statusBadge, MODES_PAIEMENT } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -28,6 +31,7 @@ export default function FactureDetailsPage() {
   
   const [montantPaiement, setMontantPaiement] = useState('');
   const [modePaiement, setModePaiement] = useState('cash');
+  const [referencePaiement, setReferencePaiement] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -40,7 +44,7 @@ export default function FactureDetailsPage() {
       .select(`
         *,
         patients(nom, prenom, code_patient, adresse, telephone),
-        lignes_facture(id, description, quantite, prix_unitaire, montant),
+        lignes_facture(id, description, code_acte, quantite, prix_unitaire, montant),
         paiements(id, montant, mode_paiement, date_paiement, reference)
       `)
       .eq('id', id)
@@ -48,7 +52,7 @@ export default function FactureDetailsPage() {
       
     if (!error && data) {
       // Calcul du total payé
-      const totalPaye = data.paiements?.reduce((sum: number, p: any) => sum + p.montant, 0) || 0;
+      const totalPaye = data.paiements?.reduce((sum: number, p: any) => sum + Number(p.montant || 0), 0) || 0;
       setFacture({ ...data, totalPaye });
       setMontantPaiement((data.montant_patient - totalPaye).toString());
     }
@@ -85,6 +89,8 @@ export default function FactureDetailsPage() {
       facture_id: facture.id,
       montant,
       mode_paiement: modePaiement,
+      reference: referencePaiement.trim() || null,
+      recu_par: profile?.id || null,
       date_paiement: new Date().toISOString()
     }]);
 
@@ -109,6 +115,7 @@ export default function FactureDetailsPage() {
       id: Date.now().toString(),
       montant,
       mode_paiement: modePaiement,
+      reference: referencePaiement.trim() || null,
       date_paiement: new Date().toISOString()
     };
 
@@ -119,6 +126,7 @@ export default function FactureDetailsPage() {
       paiements: [...(facture.paiements || []), nouveauPaiement]
     });
     setMontantPaiement((facture.montant_patient - nouveauTotalPaye).toString());
+    setReferencePaiement('');
     
     setSaving(false);
     router.refresh();
@@ -165,8 +173,44 @@ export default function FactureDetailsPage() {
     }
   };
 
+  const printedBy = profile ? { prenom: profile.prenom, nom: profile.nom, role: roleLabels[profile.role] || profile.role } : undefined;
+  const isAnnulee = facture.statut === 'annulée';
+  const hasPaiements = (facture.paiements || []).length > 0;
+  const statut = statusBadge(FACTURE_STATUTS, facture.statut);
+
+  const handleDownloadInvoice = async () => {
+    try {
+      await downloadInvoicePdf(facture.id, printedBy);
+    } catch (error) {
+      console.error(error);
+      toast.error("La facture n'a pas pu être générée.");
+    }
+  };
+
+  const handleAnnuler = async () => {
+    const ok = await confirm({
+      title: 'Annuler la facture',
+      message: `La facture ${facture.numero_facture} sera annulée et ne pourra plus être encaissée. Continuer ?`,
+      confirmText: 'Oui, annuler la facture',
+      type: 'danger',
+    });
+    if (!ok) return;
+    const { error } = await supabase.from('factures').update({ statut: 'annulée' }).eq('id', facture.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success('Facture annulée.');
+    setFacture({ ...facture, statut: 'annulée' });
+  };
+
   return (
     <div className="animate-fade-in">
+      {isAnnulee && (
+        <div className="alert alert-danger" style={{ marginBottom: 16 }}>
+          <Ban size={18} /> Cette facture est annulée : aucun encaissement n&apos;est possible.
+        </div>
+      )}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <button onClick={() => router.push('/facturation')} className="btn btn-ghost" title="Retour">
@@ -177,15 +221,30 @@ export default function FactureDetailsPage() {
             <p className="page-subtitle">Émise le {new Date(facture.date_facture).toLocaleDateString('fr-FR')}</p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <span className={`badge ${facture.statut === 'payée' ? 'badge-success' : facture.statut === 'en_attente' ? 'badge-warning' : 'badge-info'}`} style={{ fontSize: 14, padding: '8px 12px' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className={`badge ${statut.badge}`} style={{ fontSize: 14, padding: '8px 12px' }}>
             {facture.statut === 'payée' && <CheckCircle size={16} style={{ marginRight: 6 }} />}
             {facture.statut === 'en_attente' && <Clock size={16} style={{ marginRight: 6 }} />}
-            {facture.statut.charAt(0).toUpperCase() + facture.statut.slice(1)}
+            {statut.label}
           </span>
-          <button className="btn btn-outline" onClick={() => handleDownloadReceipt()}>
-            <Printer size={16} /> Reçu PDF
+          <button className="btn btn-outline" onClick={handleDownloadInvoice}>
+            <FileText size={16} /> Facture PDF
           </button>
+          {hasPaiements && (
+            <button className="btn btn-outline" onClick={() => handleDownloadReceipt()}>
+              <Printer size={16} /> Reçu PDF
+            </button>
+          )}
+          {!isAnnulee && !hasPaiements && (
+            <>
+              <Link href={`/facturation/${facture.id}/edit`} className="btn btn-outline">
+                <Edit size={16} /> Modifier
+              </Link>
+              <button className="btn btn-outline" onClick={handleAnnuler} style={{ color: 'var(--danger)' }}>
+                <Ban size={16} /> Annuler
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -257,7 +316,7 @@ export default function FactureDetailsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           
           {/* Formulaire de paiement */}
-          {resteAPayer > 0 && (
+          {resteAPayer > 0 && !isAnnulee && (
             <div className="card" style={{ border: '2px solid var(--primary-100)' }}>
               <div className="card-header" style={{ background: 'var(--primary-50)' }}>
                 <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -286,8 +345,21 @@ export default function FactureDetailsPage() {
                       <option value="mobile_money">Mobile Money (M-Pesa, Orange, Airtel)</option>
                       <option value="carte">Carte Bancaire</option>
                       <option value="virement">Virement Bancaire</option>
+                      <option value="chèque">Chèque</option>
                     </select>
                   </div>
+                  {modePaiement !== 'cash' && (
+                    <div className="form-group">
+                      <label className="form-label">Référence de la transaction</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={referencePaiement}
+                        onChange={e => setReferencePaiement(e.target.value)}
+                        placeholder={modePaiement === 'mobile_money' ? 'Ex : MP-883421' : 'N° de transaction / chèque'}
+                      />
+                    </div>
+                  )}
                   <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={saving}>
                     {saving ? <Loader2 size={18} className="animate-spin" /> : 'Encaisser'}
                   </button>
@@ -306,7 +378,9 @@ export default function FactureDetailsPage() {
                     <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--neutral-100)' }}>
                       <div>
                         <div style={{ fontWeight: 600 }}>{formatMoneySafe(p.montant)}</div>
-                        <div style={{ fontSize: 12, color: 'var(--neutral-500)', textTransform: 'uppercase' }}>{p.mode_paiement.replace('_', ' ')}</div>
+                        <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>
+                          {MODES_PAIEMENT[p.mode_paiement] || p.mode_paiement}{p.reference ? ` • ${p.reference}` : ''}
+                        </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{ fontSize: 13, color: 'var(--neutral-400)' }}>

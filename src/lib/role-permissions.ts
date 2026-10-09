@@ -13,7 +13,11 @@ export type AppModule =
   | 'pharmacie'
   | 'laboratoire'
   | 'personnel'
-  | 'facturation';
+  | 'facturation'
+  | 'departements'
+  | 'rapports'
+  | 'audit'
+  | 'profil';
 
 // Mapping module → route
 export const moduleRoutes: Record<AppModule, string> = {
@@ -27,6 +31,10 @@ export const moduleRoutes: Record<AppModule, string> = {
   'laboratoire': '/laboratoire',
   'personnel': '/personnel',
   'facturation': '/facturation',
+  'departements': '/departements',
+  'rapports': '/rapports',
+  'audit': '/audit',
+  'profil': '/profil',
 };
 
 // =====================================================
@@ -40,38 +48,39 @@ const rolePermissions: Record<RolePersonnel, AppModule[]> = {
   super_admin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
     'chambres', 'pharmacie', 'laboratoire', 'personnel', 'facturation',
+    'departements', 'rapports', 'audit', 'profil',
   ],
   admin: [
     'dashboard', 'patients', 'rendez-vous', 'pharmacie', 'chambres',
-    'personnel', 'facturation',
+    'personnel', 'facturation', 'departements', 'rapports', 'audit', 'profil',
   ],
   medecin_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'pharmacie', 'laboratoire',
+    'chambres', 'pharmacie', 'laboratoire', 'rapports', 'profil',
   ],
   medecin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'pharmacie', 'laboratoire',
+    'chambres', 'pharmacie', 'laboratoire', 'profil',
   ],
   infirmier_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres',
+    'chambres', 'profil',
   ],
   infirmier: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres',
+    'chambres', 'profil',
   ],
   technicien_labo: [
-    'dashboard', 'patients', 'laboratoire',
+    'dashboard', 'patients', 'laboratoire', 'profil',
   ],
   pharmacien: [
-    'dashboard', 'pharmacie',
+    'dashboard', 'pharmacie', 'profil',
   ],
   caissier: [
-    'dashboard', 'facturation',
+    'dashboard', 'facturation', 'profil',
   ],
   receptionniste: [
-    'dashboard', 'patients', 'rendez-vous',
+    'dashboard', 'patients', 'rendez-vous', 'profil',
   ],
 };
 

@@ -77,7 +77,13 @@ export default function EditPatientPage() {
       contact_urgence_nom: (formData.get('contact_urgence_nom') as string) || null,
       contact_urgence_tel: (formData.get('contact_urgence_tel') as string) || null,
       statut: formData.get('statut') as string || 'actif'
-    };
+    } as Record<string, unknown>;
+
+    // Champs médicaux (colonnes ajoutées par la migration)
+    const allergies = ((formData.get('allergies') as string) || '').trim();
+    const antecedents = ((formData.get('antecedents') as string) || '').trim();
+    if ('allergies' in (patient || {}) || allergies) data.allergies = allergies || null;
+    if ('antecedents' in (patient || {}) || antecedents) data.antecedents = antecedents || null;
 
     const { error } = await supabase
       .from('patients')
@@ -88,8 +94,7 @@ export default function EditPatientPage() {
       throw error;
     }
     
-    router.push('/patients');
-    router.refresh();
+    router.push(`/patients/${id}`);
     } catch (err: any) {
       console.error('Error updating patient:', err);
       setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
@@ -239,6 +244,26 @@ export default function EditPatientPage() {
                 </select>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Informations médicales */}
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div className="card-header">
+            <span className="card-title">⚕️ Allergies & Antécédents</span>
+          </div>
+          <div className="card-body">
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="allergies">Allergies connues</label>
+                <textarea name="allergies" id="allergies" className="form-textarea" rows={2} placeholder="Ex : Pénicilline, arachide, iode..." value={patient.allergies || ''} onChange={handleChange}></textarea>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="antecedents">Antécédents médicaux et chirurgicaux</label>
+                <textarea name="antecedents" id="antecedents" className="form-textarea" rows={2} placeholder="Ex : HTA, diabète de type 2, appendicectomie (2019)..." value={patient.antecedents || ''} onChange={handleChange}></textarea>
+              </div>
+            </div>
+            <p className="form-help">Ces informations s&apos;affichent en alerte lors des consultations, admissions et prescriptions.</p>
           </div>
         </div>
 

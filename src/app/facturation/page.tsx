@@ -14,14 +14,18 @@ import {
   AlertCircle,
   Loader2,
   Inbox,
-  Filter
+  Filter,
+  BookOpen,
 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { roleLabels } from '@/lib/role-permissions';
+import { downloadInvoicePdf } from '@/lib/invoice';
+import { formatMoney } from '@/lib/format';
 
-function formatCDF(montant: number): string {
-  return new Intl.NumberFormat('fr-FR', { useGrouping: true, maximumFractionDigits: 0 }).format(montant) + ' FC';
-}
+const formatCDF = formatMoney;
 
 const statutConfig: Record<string, { label: string; class: string; icon: React.ReactNode }> = {
   'en_attente': { label: 'En attente', class: 'badge-warning', icon: <Clock size={12} /> },
@@ -31,6 +35,8 @@ const statutConfig: Record<string, { label: string; class: string; icon: React.R
 };
 
 export default function FacturationPage() {
+  const { profile } = useAuth();
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [factures, setFactures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -53,7 +59,7 @@ export default function FacturationPage() {
       } else {
         const enrichedData = data?.map(f => ({
           ...f,
-          montant_paye: f.paiements?.reduce((acc: number, p: any) => acc + p.montant, 0) || 0
+          montant_paye: f.paiements?.reduce((acc: number, p: any) => acc + Number(p.montant || 0), 0) || 0
         })) || [];
         setFactures(enrichedData);
       }
@@ -65,7 +71,8 @@ export default function FacturationPage() {
   const filtered = factures.filter((f) => {
     const matchSearch = search === '' ||
       `${f.patients?.prenom} ${f.patients?.nom}`.toLowerCase().includes(search.toLowerCase()) ||
-      f.patients?.code_patient?.toLowerCase().includes(search.toLowerCase());
+      f.patients?.code_patient?.toLowerCase().includes(search.toLowerCase()) ||
+      (f.numero_facture || '').toLowerCase().includes(search.toLowerCase());
     const matchStatut = filterStatut === 'tous' || f.statut === filterStatut;
     
     let matchDate = true;
@@ -85,6 +92,18 @@ export default function FacturationPage() {
 
     return matchSearch && matchStatut && matchDate;
   });
+
+  const handleDownload = async (factureId: string) => {
+    setDownloading(factureId);
+    try {
+      await downloadInvoicePdf(factureId, profile ? { prenom: profile.prenom, nom: profile.nom, role: roleLabels[profile.role] } : undefined);
+    } catch (err) {
+      console.error(err);
+      toast.error("La facture n'a pas pu être générée.");
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const handleFilter = () => {
     setAppliedStartDate(startDate);
@@ -112,9 +131,14 @@ export default function FacturationPage() {
           <h1 className="page-title">Facturation</h1>
           <p className="page-subtitle">Gestion des paiements et factures</p>
         </div>
-        <Link href="/facturation/nouvelle" className="btn btn-primary">
-          <Plus size={16} /> Nouvelle Facture
-        </Link>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link href="/facturation/tarifs" className="btn btn-outline">
+            <BookOpen size={16} /> Tarifs des actes
+          </Link>
+          <Link href="/facturation/nouvelle" className="btn btn-primary">
+            <Plus size={16} /> Nouvelle Facture
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
@@ -148,7 +172,7 @@ export default function FacturationPage() {
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="header-search" style={{ flex: 1, minWidth: 250 }}>
               <Search className="header-search-icon" />
-              <input type="text" placeholder="Rechercher un patient ou un code..." value={search} onChange={(e) => setSearch(e.target.value)} id="invoice-search" />
+              <input type="text" placeholder="Rechercher un patient, un code ou un n° de facture..." value={search} onChange={(e) => setSearch(e.target.value)} id="invoice-search" />
             </div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -187,6 +211,7 @@ export default function FacturationPage() {
           <table className="data-table">
             <thead>
               <tr>
+                <th>Facture</th>
                 <th>Patient</th>
                 <th>Montant Total</th>
                 <th>Montant Payé</th>
@@ -201,7 +226,8 @@ export default function FacturationPage() {
                 const config = statutConfig[facture.statut] || statutConfig['en_attente'];
                 const reste = facture.montant_patient - (facture.montant_paye || 0);
                 return (
-                  <tr key={facture.id} className="animate-slide-in-right" style={{ animationDelay: `${index * 0.03}s` }}>
+                  <tr key={facture.id} className="animate-slide-in-right" style={{ animationDelay: `${Math.min(index, 15) * 0.03}s` }}>
+                    <td style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>{facture.numero_facture}</td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{facture.patients?.prenom} {facture.patients?.nom}</div>
                       <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>{facture.patients?.code_patient}</div>
@@ -224,8 +250,8 @@ export default function FacturationPage() {
                         <Link href={`/facturation/${facture.id}`} className="btn btn-sm btn-outline">
                           Détails / Encaisser
                         </Link>
-                        <button className="btn btn-sm btn-ghost">
-                          <Receipt size={14} style={{ marginRight: 4 }} /> Reçu
+                        <button className="btn btn-sm btn-ghost" onClick={() => handleDownload(facture.id)} disabled={downloading === facture.id} title="Télécharger la facture PDF">
+                          {downloading === facture.id ? <Loader2 size={14} className="animate-spin" /> : <Receipt size={14} style={{ marginRight: 4 }} />} PDF
                         </button>
                       </div>
                     </td>

@@ -5,6 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
+import { toast } from 'react-hot-toast';
+import { roleLabels } from '@/lib/role-permissions';
 
 export default function EditPersonnelPage() {
   const router = useRouter();
@@ -68,11 +70,11 @@ export default function EditPersonnelPage() {
     const data = {
       nom: formData.get('nom') as string,
       prenom: formData.get('prenom') as string,
-      email: formData.get('email') as string,
       telephone: formData.get('telephone') as string,
       role: formData.get('role') as string,
-      specialite: formData.get('specialite') as string || null,
+      specialite: ((formData.get('specialite') as string) || '').trim() || null,
       departement_id: formData.get('departement_id') as string || null,
+      statut: (formData.get('statut') as string) || 'actif',
     };
 
     const { error } = await supabase.from('personnel').update(data).eq('id', id);
@@ -80,6 +82,7 @@ export default function EditPersonnelPage() {
     if (error) {
       throw error;
     }
+    toast.success('Profil mis à jour.');
     router.push('/personnel');
     } catch (err: any) {
       console.error(err);
@@ -145,7 +148,7 @@ export default function EditPersonnelPage() {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Email (Connexion) *</label>
-                <input type="email" name="email" className="form-input" required defaultValue={personnel.email} />
+                <input type="email" name="email" className="form-input" defaultValue={personnel.email} disabled title="L'email sert d'identifiant de connexion et ne peut pas être modifié ici" />
               </div>
               <div className="form-group">
                 <label className="form-label">Téléphone</label>
@@ -157,25 +160,17 @@ export default function EditPersonnelPage() {
               <div className="form-group">
                 <label className="form-label">Rôle d'accès *</label>
                 <select name="role" className="form-select" required defaultValue={personnel.role}>
-                  <option value="medecin">Médecin</option>
-                  <option value="infirmier">Infirmier(e)</option>
-                  <option value="receptionniste">Réceptionniste</option>
-                  <option value="pharmacien">Pharmacien(ne)</option>
-                  <option value="laborantin">Laborantin</option>
-                  <option value="admin">Administrateur</option>
+                  {Object.entries(roleLabels).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Spécialité (si médical)</label>
-                <select name="specialite" className="form-select" defaultValue={personnel.specialite || ''}>
-                  <option value="">-- Aucune / Non applicable --</option>
-                  <option value="Généraliste">Généraliste</option>
-                  <option value="Pédiatre">Pédiatre</option>
-                  <option value="Gynécologue">Gynécologue</option>
-                  <option value="Chirurgien">Chirurgien</option>
-                  <option value="Cardiologue">Cardiologue</option>
-                  <option value="Ophtalmologue">Ophtalmologue</option>
-                </select>
+                <input name="specialite" className="form-input" list="specialites" defaultValue={personnel.specialite || ''} placeholder="Ex : Médecine générale" />
+                <datalist id="specialites">
+                  {['Médecine Générale', 'Médecine interne', 'Cardiologie', 'Pédiatrie', 'Gynécologie', 'Chirurgie', 'Neurologie', 'Ophtalmologie', 'Dentisterie', 'Urgences', 'Anesthésiologie', 'Dermatologie', 'Orthopédie'].map((s) => <option key={s} value={s} />)}
+                </datalist>
               </div>
             </div>
 
@@ -187,6 +182,16 @@ export default function EditPersonnelPage() {
                   <option key={d.id} value={d.id}>{d.nom}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Statut du compte</label>
+              <select name="statut" className="form-select" defaultValue={personnel.statut || 'actif'}>
+                <option value="actif">Actif — peut se connecter</option>
+                <option value="congé">En congé — connexion bloquée</option>
+                <option value="inactif">Inactif (départ) — connexion bloquée</option>
+              </select>
+              <p className="form-help">Seuls les comptes « Actif » peuvent se connecter à l&apos;application.</p>
             </div>
 
           </div>

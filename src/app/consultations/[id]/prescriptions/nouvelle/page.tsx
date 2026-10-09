@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Save, AlertCircle, Loader2, Pill } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, Loader2, Pill, Search, Check, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
 import type { Medicament } from '@/types';
@@ -18,6 +18,8 @@ export default function NouvellePrescriptionPage() {
   
   const [medicaments, setMedicaments] = useState<Medicament[]>([]);
   const [selectedMedicamentId, setSelectedMedicamentId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [customNomMedicament, setCustomNomMedicament] = useState('');
   const [dosage, setDosage] = useState('');
   
@@ -37,20 +39,27 @@ export default function NouvellePrescriptionPage() {
     fetchMedicaments();
   }, []);
 
-  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    setSelectedMedicamentId(val);
-    
-    if (val) {
-      const med = medicaments.find(m => m.id === val);
-      if (med) {
-        setCustomNomMedicament(med.nom_commercial);
-        setDosage(med.dosage || '');
-      }
-    } else {
-      setCustomNomMedicament('');
-      setDosage('');
-    }
+  const filteredMedicaments = medicaments.filter(m => {
+    const q = searchQuery.toLowerCase();
+    return (m.nom_commercial || '').toLowerCase().includes(q) ||
+           (m.nom_generique || '').toLowerCase().includes(q) ||
+           (m.code || '').toLowerCase().includes(q) ||
+           (m.dosage || '').toLowerCase().includes(q);
+  });
+
+  const handleSelectMedicament = (med: Medicament) => {
+    setSelectedMedicamentId(med.id);
+    setSearchQuery(`${med.nom_commercial}${med.dosage ? ` (${med.dosage})` : ''}`);
+    setCustomNomMedicament(med.nom_commercial);
+    setDosage(med.dosage || '');
+    setIsDropdownOpen(false);
+  };
+
+  const handleClearMedicament = () => {
+    setSelectedMedicamentId('');
+    setSearchQuery('');
+    setCustomNomMedicament('');
+    setDosage('');
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -135,22 +144,107 @@ export default function NouvellePrescriptionPage() {
           <div className="card-header"><span className="card-title">Détails du médicament</span></div>
           <div className="card-body">
             
-            <div className="form-group">
-              <label className="form-label">Sélectionner dans l'inventaire (Optionnel)</label>
-              <select className="form-select" value={selectedMedicamentId} onChange={handleSelectChange}>
-                <option value="">-- Saisie libre (Médicament hors stock) --</option>
-                {medicaments.map(med => {
-                  const isLow = med.stock_actuel <= med.stock_minimum;
-                  const isRupture = med.stock_actuel === 0;
-                  return (
-                    <option key={med.id} value={med.id} disabled={isRupture}>
-                      {med.nom_commercial} {med.dosage ? `(${med.dosage})` : ''} - Stock: {med.stock_actuel} {isRupture ? '(Rupture)' : isLow ? '(Faible)' : ''}
-                    </option>
-                  );
-                })}
-              </select>
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label className="form-label">Rechercher dans l'inventaire (Optionnel)</label>
+              <div style={{ position: 'relative' }}>
+                <Search size={16} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--neutral-400)' }} />
+                <input
+                  type="text"
+                  className="form-input"
+                  style={{ paddingLeft: 36, paddingRight: 36 }}
+                  placeholder="Nom commercial, générique, code ou dosage..."
+                  value={searchQuery}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSelectedMedicamentId('');
+                    setIsDropdownOpen(true);
+                  }}
+                  onBlur={() => {
+                    // Timeout pour permettre au clic sur l'option de s'enregistrer
+                    setTimeout(() => setIsDropdownOpen(false), 200);
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={handleClearMedicament}
+                    title="Effacer (saisie libre)"
+                    style={{ position: 'absolute', right: 8, top: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neutral-400)', padding: 2 }}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              {isDropdownOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 10,
+                  border: '1px solid var(--neutral-200)',
+                  borderRadius: 8,
+                  marginTop: 4,
+                  maxHeight: 240,
+                  overflowY: 'auto',
+                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                  backgroundColor: 'white'
+                }}>
+                  {filteredMedicaments.length > 0 ? (
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {filteredMedicaments.map(med => {
+                        const isLow = med.stock_actuel <= med.stock_minimum;
+                        const isRupture = med.stock_actuel === 0;
+                        return (
+                          <li
+                            key={med.id}
+                            style={{
+                              padding: '10px 16px',
+                              cursor: isRupture ? 'not-allowed' : 'pointer',
+                              opacity: isRupture ? 0.5 : 1,
+                              borderBottom: '1px solid var(--neutral-100)',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              backgroundColor: selectedMedicamentId === med.id ? 'var(--primary-50)' : 'transparent'
+                            }}
+                            onMouseDown={(e) => {
+                              if (isRupture) {
+                                e.preventDefault();
+                                return;
+                              }
+                              handleSelectMedicament(med);
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 500 }}>
+                                {med.nom_commercial} {med.dosage ? `(${med.dosage})` : ''}
+                              </div>
+                              <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>
+                                {med.nom_generique ? `${med.nom_generique} • ` : ''}Stock: {med.stock_actuel}
+                                {isRupture ? (
+                                  <span style={{ color: 'var(--danger-600, #dc2626)', fontWeight: 500 }}> (Rupture)</span>
+                                ) : isLow ? (
+                                  <span style={{ color: 'var(--warning-600, #d97706)', fontWeight: 500 }}> (Faible)</span>
+                                ) : null}
+                              </div>
+                            </div>
+                            {selectedMedicamentId === med.id && <Check size={16} className="text-primary-600" />}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--neutral-500)' }}>
+                      Aucun médicament trouvé. Saisissez le nom manuellement ci-dessous.
+                    </div>
+                  )}
+                </div>
+              )}
               <p style={{ fontSize: 12, color: 'var(--neutral-500)', marginTop: 4 }}>
-                Sélectionnez un médicament de la base de données pour faciliter la délivrance par la pharmacie. Les médicaments en rupture sont grisés.
+                Sélectionnez un médicament de la base de données pour faciliter la délivrance par la pharmacie. Les médicaments en rupture sont grisés. Laissez vide pour une saisie libre (médicament hors stock).
               </p>
             </div>
 

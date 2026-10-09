@@ -1,11 +1,14 @@
 'use client';
 
-import { Search, Bell, Settings, Calendar, LogOut } from 'lucide-react';
+import Link from 'next/link';
+import { Settings, Calendar } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { roleLabels } from '@/lib/role-permissions';
+import GlobalSearch from './GlobalSearch';
+import NotificationsBell from './NotificationsBell';
 
 export default function Header() {
-  const { profile, logout } = useAuth();
+  const { profile } = useAuth();
   const today = new Date();
   const dateStr = today.toLocaleDateString('fr-FR', {
     weekday: 'long',
@@ -16,41 +19,32 @@ export default function Header() {
 
   return (
     <header className="header">
-      {/* Search */}
-      <div className="header-search">
-        <Search className="header-search-icon" />
-        <input
-          type="text"
-          placeholder="Rechercher un patient, médecin, dossier..."
-          id="global-search"
-        />
-      </div>
+      {/* Recherche globale */}
+      <GlobalSearch />
 
-      {/* Right Actions */}
+      {/* Actions */}
       <div className="header-right">
         <div className="header-date">
           <Calendar size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
           {dateStr}
         </div>
 
-        <button className="header-btn" title="Notifications" id="btn-notifications">
-          <Bell size={20} />
-          <span className="header-btn-badge"></span>
-        </button>
+        <NotificationsBell />
 
-        <button className="header-btn" title="Paramètres" id="btn-settings">
+        <Link href="/profil" className="header-btn" title="Mon profil & paramètres" id="btn-settings">
           <Settings size={20} />
-        </button>
+        </Link>
 
-        {/* User badge */}
+        {/* Utilisateur */}
         {profile && (
-          <div style={{
+          <Link href="/profil" style={{
             display: 'flex',
             alignItems: 'center',
             gap: 10,
             marginLeft: 8,
             paddingLeft: 16,
             borderLeft: '1px solid var(--neutral-200)',
+            textDecoration: 'none',
           }}>
             <div style={{
               width: 34,
@@ -74,7 +68,7 @@ export default function Header() {
                 {roleLabels[profile.role]}
               </div>
             </div>
-          </div>
+          </Link>
         )}
       </div>
     </header>
