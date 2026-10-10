@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { roleLabels } from '@/lib/role-permissions';
 import { downloadInvoicePdf } from '@/lib/invoice';
+import PendingBillingCard from '@/components/facturation/PendingBillingCard';
 import { formatMoney } from '@/lib/format';
 
 const formatCDF = formatMoney;
@@ -165,6 +166,8 @@ export default function FacturationPage() {
           </div>
         </div>
       </div>
+
+      <PendingBillingCard />
 
       {/* Filters */}
       <div className="card" style={{ marginBottom: 20 }}>

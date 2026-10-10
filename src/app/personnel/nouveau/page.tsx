@@ -55,8 +55,8 @@ export default function NouveauPersonnelPage() {
     e.preventDefault();
     setError(null);
 
-    if (formData.password.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères.");
+    if (formData.password.length < 8) {
+      setError("Le mot de passe doit contenir au moins 8 caractères.");
       return;
     }
 
@@ -76,7 +76,9 @@ export default function NouveauPersonnelPage() {
       formDataObj.append(key, value);
     });
 
-    const result = await createPersonnelAction(formDataObj);
+    // Le jeton de session prouve au serveur que l’appelant est un administrateur connecté
+    const { data: { session } } = await supabase.auth.getSession();
+    const result = await createPersonnelAction(formDataObj, session?.access_token);
 
     if (result.error) {
       setError(result.error);
@@ -277,14 +279,14 @@ export default function NouveauPersonnelPage() {
                   name="password" 
                   className="form-input" 
                   required 
-                  minLength={6}
+                  minLength={8}
                   style={{ paddingLeft: 36 }}
                   value={formData.password} 
                   onChange={handleChange} 
                 />
               </div>
               <span style={{ fontSize: 11, color: 'var(--neutral-400)', marginTop: 4, display: 'block' }}>
-                L&apos;utilisateur pourra le modifier plus tard (min 6 caractères)
+                L&apos;utilisateur pourra le modifier plus tard (min 8 caractères)
               </span>
             </div>
           </div>

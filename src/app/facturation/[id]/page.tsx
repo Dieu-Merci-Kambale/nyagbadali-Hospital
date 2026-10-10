@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertCircle, Printer, CreditCard, CheckCircle, Clock, FileText, Edit, Ban } from 'lucide-react';
 import Link from 'next/link';
 import { downloadInvoicePdf } from '@/lib/invoice';
-import { FACTURE_STATUTS, statusBadge, MODES_PAIEMENT } from '@/lib/format';
+import { FACTURE_STATUTS, statusBadge, MODES_PAIEMENT, explainDbError } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -84,29 +84,24 @@ export default function FactureDetailsPage() {
 
     setSaving(true);
     
-    // 1. Inserer le paiement
-    const { error: pError } = await supabase.from('paiements').insert([{
-      facture_id: facture.id,
-      montant,
-      mode_paiement: modePaiement,
-      reference: referencePaiement.trim() || null,
-      recu_par: profile?.id || null,
-      date_paiement: new Date().toISOString()
-    }]);
+    // Paiement + statut de la facture en une seule transaction, avec contrôle
+    // du reste à payer côté base (deux encaissements simultanés ne peuvent pas dépasser le dû)
+    const { data: res, error: pError } = await supabase.rpc('encaisser_paiement', {
+      p_facture_id: facture.id,
+      p_montant: montant,
+      p_mode: modePaiement,
+      p_reference: referencePaiement.trim() || null,
+    });
 
     if (pError) {
-      toast.error(pError.message);
+      toast.error(explainDbError(pError));
       setSaving(false);
+      fetchData();
       return;
     }
 
-    // 2. Mettre à jour le statut de la facture
-    const nouveauTotalPaye = facture.totalPaye + montant;
-    const nouveauStatut = nouveauTotalPaye >= facture.montant_patient ? 'payée' : 'partielle';
-
-    if (facture.statut !== nouveauStatut) {
-      await supabase.from('factures').update({ statut: nouveauStatut }).eq('id', facture.id);
-    }
+    const nouveauTotalPaye = Number(res?.total_paye ?? facture.totalPaye + montant);
+    const nouveauStatut = res?.statut ?? (nouveauTotalPaye >= facture.montant_patient ? 'payée' : 'partielle');
 
     toast.success("Paiement enregistré avec succès !");
     

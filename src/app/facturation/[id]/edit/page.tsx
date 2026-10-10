@@ -31,7 +31,7 @@ export default function EditFacturePage() {
       const [{ data, error }, catalogue] = await Promise.all([
         supabase
           .from('factures')
-          .select('*, patients(nom, prenom, code_patient), lignes_facture(id, description, code_acte, quantite, prix_unitaire, montant), paiements(id)')
+          .select('*, patients(nom, prenom, code_patient), lignes_facture(*), paiements(id)')
           .eq('id', id)
           .single(),
         fetchActes(),
@@ -47,6 +47,8 @@ export default function EditFacturePage() {
           code_acte: l.code_acte || '',
           quantite: Number(l.quantite) || 1,
           prix_unitaire: Number(l.prix_unitaire) || 0,
+          source_type: l.source_type || null,
+          source_id: l.source_id || null,
         }));
         setLignes(existing.length ? existing : [newLine()]);
         const total = Number(data.montant_total) || 0;
@@ -107,6 +109,7 @@ export default function EditFacturePage() {
         prix_unitaire: l.prix_unitaire,
         montant: l.quantite * l.prix_unitaire,
         couvert_assurance: tauxAssurance > 0,
+        ...(l.source_id ? { source_type: l.source_type, source_id: l.source_id } : {}),
       }))
     );
     if (insError) {

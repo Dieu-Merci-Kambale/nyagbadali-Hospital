@@ -86,41 +86,26 @@ function NouvelleAdmissionForm() {
     setSaving(true);
     setErrorMsg('');
 
-    // Le lit a pu être pris entre-temps par un autre poste
-    const { data: lit } = await supabase.from('lits').select('statut').eq('id', litId).single();
-    if (lit?.statut !== 'disponible') {
-      setErrorMsg("Ce lit vient d'être attribué à un autre patient. Veuillez en choisir un autre.");
-      setLitsDisponibles((prev) => prev.filter((l) => l.id !== litId));
-      setSaving(false);
-      return;
-    }
-
-    const data = {
-      patient_id: selectedPatientId,
-      medecin_responsable_id: (formData.get('medecin_responsable_id') as string) || null,
-      lit_id: litId,
-      motif_admission: formData.get('motif_admission') as string,
-      type_admission: formData.get('type_admission') as string,
-      diagnostic_entree: (formData.get('diagnostic_entree') as string) || null,
-      date_admission: new Date().toISOString(),
-      statut: 'actif',
-    };
-
-    const { data: inserted, error: hospError } = await supabase.from('hospitalisations').insert([data]).select('id').single();
+    // Réservation du lit et création du séjour en une seule transaction :
+    // impossible d'attribuer le même lit à deux patients en même temps.
+    const { data: hospId, error: hospError } = await supabase.rpc('admettre_patient', {
+      p_patient_id: selectedPatientId,
+      p_lit_id: litId,
+      p_medecin_id: (formData.get('medecin_responsable_id') as string) || null,
+      p_motif: formData.get('motif_admission') as string,
+      p_type_admission: formData.get('type_admission') as string,
+      p_diagnostic_entree: (formData.get('diagnostic_entree') as string) || null,
+    });
     if (hospError) {
       console.error(hospError);
       setErrorMsg(explainDbError(hospError));
+      if (/lit/i.test(hospError.message || '')) setLitsDisponibles((prev) => prev.filter((l) => l.id !== litId));
       setSaving(false);
       return;
     }
 
-    const { error: litError } = await supabase.from('lits').update({ statut: 'occupé' }).eq('id', litId);
-    if (litError) {
-      toast.error("Admission enregistrée, mais le statut du lit n'a pas pu être mis à jour.");
-    } else {
-      toast.success('Patient admis.');
-    }
-    router.push(`/hospitalisation/${inserted.id}`);
+    toast.success('Patient admis.');
+    router.push(`/hospitalisation/${hospId}`);
   };
 
   return (

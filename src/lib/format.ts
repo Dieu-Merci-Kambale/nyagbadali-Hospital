@@ -179,6 +179,16 @@ export function statusBadge(map: Record<string, StatusStyle>, statut?: string | 
 export function explainDbError(error: { message?: string; code?: string } | null | undefined): string {
   if (!error) return 'Erreur inconnue.';
   const msg = error.message || '';
+  // Fonction de base de données absente : script de sécurité non exécuté
+  if (error.code === 'PGRST202' || /Could not find the function/i.test(msg)) {
+    return "Cette opération nécessite la mise à jour de sécurité de la base. Exécutez le script supabase/migrations/20261010_securite_roles.sql dans Supabase.";
+  }
+  // Refus des règles de sécurité (rôle non autorisé)
+  if (error.code === '42501' || /row-level security|permission denied/i.test(msg)) {
+    return "Action non autorisée pour votre rôle.";
+  }
+  // Message métier explicite levé par la base (RAISE EXCEPTION)
+  if (error.code === 'P0001') return msg;
   if (error.code === '42P01' || error.code === 'PGRST205' || /does not exist|Could not find the table/i.test(msg)) {
     return "Cette fonctionnalité nécessite la mise à jour de la base de données. Exécutez le script supabase/migrations/20261009_fonctionnalites_completes.sql dans Supabase.";
   }

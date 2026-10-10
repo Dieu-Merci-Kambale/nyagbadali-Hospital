@@ -2,13 +2,72 @@ import { supabase } from '@/lib/supabase';
 import { buildFullInvoiceDocumentPdf } from '@/lib/document-models';
 import type { ActeTarif } from '@/types';
 
+export type SourceType = 'consultation' | 'prescription' | 'analyse' | 'hospitalisation';
+
 export type InvoiceLine = {
   key: string;
   description: string;
   code_acte: string;
   quantite: number;
   prix_unitaire: number;
+  /** Élément facturé (consultation, médicament délivré, analyse, séjour) */
+  source_type?: SourceType | null;
+  source_id?: string | null;
 };
+
+/** Élément restant à facturer, renvoyé par la fonction elements_a_facturer() de la base. */
+export type ElementAFacturer = {
+  patient_id: string;
+  patient_nom: string;
+  patient_code: string;
+  source_type: SourceType;
+  source_id: string;
+  date_element: string;
+  libelle: string;
+  details: string;
+  quantite: number;
+  prix_unitaire: number | null;
+  code_acte: string | null;
+  consultation_id: string | null;
+  hospitalisation_id: string | null;
+};
+
+export const SOURCE_LABELS: Record<SourceType, string> = {
+  consultation: 'Consultations',
+  prescription: 'Médicaments délivrés',
+  analyse: 'Examens de laboratoire',
+  hospitalisation: 'Hospitalisation',
+};
+
+/** Éléments non facturés d'un patient (ou de tous les patients si null). */
+export async function fetchElementsAFacturer(patientId: string | null) {
+  const { data, error } = await supabase.rpc('elements_a_facturer', { p_patient_id: patientId });
+  return { elements: (data || []) as ElementAFacturer[], error };
+}
+
+/** Transforme un élément à facturer en ligne de facture (prix complété depuis le catalogue si besoin). */
+export function elementToLine(el: ElementAFacturer, actes: ActeTarif[]): InvoiceLine {
+  let prix = el.prix_unitaire !== null && el.prix_unitaire !== undefined ? Number(el.prix_unitaire) : null;
+  let code = el.code_acte || '';
+  if (prix === null && el.source_type === 'analyse') {
+    const acte = matchActe(actes, el.libelle, 'laboratoire');
+    if (acte) {
+      prix = Number(acte.prix);
+      code = acte.code;
+    }
+  }
+  const description = el.source_type === 'consultation' || el.source_type === 'hospitalisation'
+    ? `${el.libelle} — ${el.details}`
+    : el.libelle;
+  return newLine({
+    description,
+    code_acte: code,
+    quantite: el.quantite,
+    prix_unitaire: prix ?? 0,
+    source_type: el.source_type,
+    source_id: el.source_id,
+  });
+}
 
 export const newLine = (patch: Partial<InvoiceLine> = {}): InvoiceLine => ({
   key: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,

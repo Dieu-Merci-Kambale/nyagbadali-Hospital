@@ -1,15 +1,19 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Save, AlertCircle, Loader2, Shield, Wand2 } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, Loader2, Shield, ListChecks, PenLine } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useConfirm } from '@/context/ConfirmContext';
 import PatientSearch from '@/components/ui/PatientSearch';
 import InvoiceLinesEditor, { InvoiceTotals } from '@/components/facturation/InvoiceLinesEditor';
-import { fetchActes, matchActe, newLine, generateInvoiceNumber, type InvoiceLine } from '@/lib/invoice';
-import { formatMoney, daysBetween, explainDbError } from '@/lib/format';
+import UnbilledItemsPanel from '@/components/facturation/UnbilledItemsPanel';
+import {
+  fetchActes, fetchElementsAFacturer, elementToLine, newLine, generateInvoiceNumber,
+  type InvoiceLine, type ElementAFacturer,
+} from '@/lib/invoice';
+import { formatMoney, explainDbError } from '@/lib/format';
 import type { ActeTarif } from '@/types';
 
 function NouvelleFactureForm() {
@@ -25,118 +29,113 @@ function NouvelleFactureForm() {
   const [actes, setActes] = useState<ActeTarif[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [initialPatientId, setInitialPatientId] = useState<string | null>(patientIdParam);
+  const [resolving, setResolving] = useState(Boolean(!patientIdParam && (consultationId || hospitalisationId)));
   const [assureur, setAssureur] = useState<string | null>(null);
-  const [origine, setOrigine] = useState('');
-  const [prefilling, setPrefilling] = useState(Boolean(consultationId || hospitalisationId));
 
-  const [lignes, setLignes] = useState<InvoiceLine[]>([newLine()]);
+  const [elements, setElements] = useState<ElementAFacturer[]>([]);
+  const [elementsLoading, setElementsLoading] = useState(false);
+  const [elementsError, setElementsError] = useState('');
+
+  // Lignes issues des prestations cochées + lignes saisies à la main
+  const [lignes, setLignes] = useState<InvoiceLine[]>([]);
   const [tauxAssurance, setTauxAssurance] = useState<number>(0);
 
-  // Catalogue + pré-remplissage depuis une consultation ou un séjour
+  // Catalogue des tarifs
   useEffect(() => {
-    let ignore = false;
-    async function init() {
-      const catalogue = await fetchActes();
-      if (ignore) return;
-      setActes(catalogue);
+    fetchActes().then(setActes);
+  }, []);
 
-      if (consultationId) {
-        const { data: c } = await supabase
-          .from('consultations')
-          .select('id, patient_id, motif, date_consultation, personnel(specialite)')
-          .eq('id', consultationId)
-          .single();
-        if (!c || ignore) { setPrefilling(false); return; }
+  // Patient de la consultation / du séjour passé en paramètre
+  useEffect(() => {
+    if (patientIdParam || (!consultationId && !hospitalisationId)) return;
+    const table = consultationId ? 'consultations' : 'hospitalisations';
+    supabase.from(table).select('patient_id').eq('id', (consultationId || hospitalisationId)!).maybeSingle().then(({ data }) => {
+      if (data?.patient_id) setInitialPatientId(data.patient_id);
+      setResolving(false);
+    });
+  }, [patientIdParam, consultationId, hospitalisationId]);
 
-        const lines: InvoiceLine[] = [];
-        const specialite = ((c as any).personnel?.specialite || '').toLowerCase();
-        const acteConsult = catalogue.find((a) => a.code === (specialite && !specialite.includes('générale') ? 'CS-SPE' : 'CS-GEN'));
-        lines.push(newLine({
-          description: acteConsult?.libelle || 'Consultation médicale',
-          code_acte: acteConsult?.code || '',
-          prix_unitaire: Number(acteConsult?.prix || 0),
-        }));
-
-        // Médicaments délivrés par la pharmacie
-        const { data: pres } = await supabase
-          .from('prescriptions')
-          .select('id, nom_medicament, dosage, statut, medicament:medicaments(nom_commercial, prix_unitaire)')
-          .eq('consultation_id', consultationId)
-          .eq('statut', 'dispensée');
-        const presIds = (pres || []).map((p: any) => p.id);
-        const { data: mvts } = presIds.length
-          ? await supabase.from('mouvements_stock').select('prescription_id, quantite').in('prescription_id', presIds)
-          : { data: [] as any[] };
-        (pres || []).forEach((p: any) => {
-          const qty = (mvts || []).filter((m: any) => m.prescription_id === p.id).reduce((s: number, m: any) => s + Math.abs(m.quantite || 0), 0);
-          lines.push(newLine({
-            description: `${p.medicament?.nom_commercial || p.nom_medicament}${p.dosage ? ` ${p.dosage}` : ''}`,
-            code_acte: 'PHARMA',
-            quantite: qty || 1,
-            prix_unitaire: Number(p.medicament?.prix_unitaire || 0),
-          }));
-        });
-
-        // Examens de laboratoire demandés
-        const { data: labs } = await supabase
-          .from('analyses_laboratoire')
-          .select('type_analyse, statut')
-          .eq('consultation_id', consultationId)
-          .neq('statut', 'annulé');
-        (labs || []).forEach((l: any) => {
-          const acte = matchActe(catalogue, l.type_analyse, 'laboratoire');
-          lines.push(newLine({
-            description: acte?.libelle || l.type_analyse,
-            code_acte: acte?.code || '',
-            prix_unitaire: Number(acte?.prix || 0),
-          }));
-        });
-
-        if (!ignore) {
-          setInitialPatientId(c.patient_id);
-          setLignes(lines);
-          setOrigine(`Consultation du ${new Date(c.date_consultation).toLocaleDateString('fr-FR')} — ${c.motif}`);
-        }
-      } else if (hospitalisationId) {
-        const { data: h } = await supabase
-          .from('hospitalisations')
-          .select('id, patient_id, date_admission, date_sortie, motif_admission, lits(type_lit)')
-          .eq('id', hospitalisationId)
-          .single();
-        if (!h || ignore) { setPrefilling(false); return; }
-        const jours = daysBetween(h.date_admission, h.date_sortie || new Date());
-        const soinsIntensifs = (h as any).lits?.type_lit === 'soins_intensifs';
-        const acte = catalogue.find((a) => a.code === (soinsIntensifs ? 'HOSP-SI' : 'HOSP-STD'));
-        if (!ignore) {
-          setInitialPatientId(h.patient_id);
-          setLignes([newLine({
-            description: acte?.libelle || "Journée d'hospitalisation",
-            code_acte: acte?.code || '',
-            quantite: jours,
-            prix_unitaire: Number(acte?.prix || 0),
-          })]);
-          setOrigine(`Séjour du ${new Date(h.date_admission).toLocaleDateString('fr-FR')} (${jours} jour${jours > 1 ? 's' : ''}) — ${h.motif_admission}`);
-        }
-      }
-      if (!ignore) setPrefilling(false);
-    }
-    init();
-    return () => { ignore = true; };
-  }, [consultationId, hospitalisationId]);
-
-  // Couverture d'assurance du patient
+  // Prestations non facturées du patient sélectionné
   useEffect(() => {
     if (!selectedPatientId) {
+      setElements([]);
+      setLignes([]);
       setAssureur(null);
       return;
     }
-    supabase.from('patients').select('assureur').eq('id', selectedPatientId).single().then(({ data }) => setAssureur(data?.assureur || null));
-  }, [selectedPatientId]);
+    let ignore = false;
+    setElementsLoading(true);
+    supabase.from('patients').select('assureur').eq('id', selectedPatientId).single().then(({ data }) => {
+      if (!ignore) setAssureur(data?.assureur || null);
+    });
+    fetchElementsAFacturer(selectedPatientId).then(({ elements: els, error }) => {
+      if (ignore) return;
+      setElementsLoading(false);
+      if (error) {
+        setElementsError(explainDbError(error));
+        setElements([]);
+        setLignes([newLine()]);
+        return;
+      }
+      setElementsError('');
+      setElements(els);
+      // Présélection : la consultation ou le séjour demandé, sinon tout ce qui reste dû
+      const preselect = els.filter((e) =>
+        consultationId ? (e.consultation_id === consultationId || e.source_id === consultationId)
+          : hospitalisationId ? e.hospitalisation_id === hospitalisationId
+            : true
+      );
+      setLignes(preselect.length ? preselect.map((e) => elementToLine(e, actes)) : [newLine()]);
+    });
+    return () => { ignore = true; };
+    // Les tarifs sont appliqués à la présélection ; ils sont chargés avant le choix du patient
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPatientId, consultationId, hospitalisationId]);
+
+  // Si le catalogue arrive après les prestations, compléter les prix manquants
+  useEffect(() => {
+    if (!actes.length) return;
+    setLignes((prev) => prev.map((l) => {
+      if (l.source_type !== 'analyse' || l.prix_unitaire > 0) return l;
+      const el = elements.find((e) => e.source_id === l.source_id);
+      return el ? { ...elementToLine(el, actes), key: l.key } : l;
+    }));
+  }, [actes, elements]);
+
+  const selected = useMemo(() => new Set(lignes.filter((l) => l.source_id).map((l) => l.source_id as string)), [lignes]);
+
+  const toggleElement = (el: ElementAFacturer) => {
+    setLignes((prev) => {
+      if (prev.some((l) => l.source_id === el.source_id)) {
+        const next = prev.filter((l) => l.source_id !== el.source_id);
+        return next.length ? next : [newLine()];
+      }
+      // Remplace la ligne vide initiale le cas échéant
+      const base = prev.filter((l) => l.source_id || l.description.trim() !== '');
+      return [...base, elementToLine(el, actes)];
+    });
+  };
+
+  const toggleAll = (select: boolean) => {
+    setLignes((prev) => {
+      const manuelles = prev.filter((l) => !l.source_id && l.description.trim() !== '');
+      if (!select) return manuelles.length ? manuelles : [newLine()];
+      const existantes = prev.filter((l) => l.source_id);
+      const ajout = elements.filter((e) => !existantes.some((l) => l.source_id === e.source_id)).map((e) => elementToLine(e, actes));
+      return [...existantes, ...ajout, ...manuelles];
+    });
+  };
+
+  const priceOf = (el: ElementAFacturer) => {
+    const ligne = lignes.find((l) => l.source_id === el.source_id);
+    return ligne ? ligne.prix_unitaire : elementToLine(el, actes).prix_unitaire;
+  };
 
   const lignesValides = lignes.filter((l) => l.description.trim() !== '');
   const totalGlobal = lignesValides.reduce((acc, l) => acc + l.quantite * l.prix_unitaire, 0);
   const montantAssurance = Math.round((totalGlobal * tauxAssurance) / 100);
   const montantPatient = totalGlobal - montantAssurance;
+  const sansPrix = lignesValides.filter((l) => l.prix_unitaire <= 0);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -145,27 +144,36 @@ function NouvelleFactureForm() {
       setErrorMsg('Veuillez sélectionner un patient.');
       return;
     }
-    if (totalGlobal <= 0) {
-      setErrorMsg('Le montant total de la facture ne peut pas être nul. Vérifiez les prix unitaires.');
+    if (lignesValides.length === 0 || totalGlobal <= 0) {
+      setErrorMsg('La facture ne contient aucune prestation chiffrée.');
       return;
     }
 
     const isConfirmed = await confirm({
       title: 'Créer la facture',
-      message: `Générer une facture de ${formatMoney(totalGlobal)} (net patient : ${formatMoney(montantPatient)}) ?`,
+      message: (
+        <>
+          Générer une facture de <strong>{formatMoney(totalGlobal)}</strong> (net patient : {formatMoney(montantPatient)}) pour {lignesValides.length} prestation(s) ?
+          {sansPrix.length > 0 && <><br /><span style={{ color: 'var(--warning-600)' }}>{sansPrix.length} ligne(s) sans prix seront facturées à 0 FC.</span></>}
+        </>
+      ),
       confirmText: 'Oui, créer',
-      type: 'info',
+      type: sansPrix.length ? 'warning' : 'info',
     });
     if (!isConfirmed) return;
 
     setSaving(true);
     setErrorMsg('');
 
+    const sources = lignesValides.filter((l) => l.source_id);
+    const uniqueConsult = consultationId && sources.every((l) => elements.find((e) => e.source_id === l.source_id)?.consultation_id === consultationId || l.source_id === consultationId);
+    const uniqueHosp = hospitalisationId && sources.every((l) => l.source_id === hospitalisationId);
+
     const factureData = {
       numero_facture: generateInvoiceNumber(),
       patient_id: selectedPatientId,
-      consultation_id: consultationId || null,
-      hospitalisation_id: hospitalisationId || null,
+      consultation_id: uniqueConsult ? consultationId : null,
+      hospitalisation_id: uniqueHosp ? hospitalisationId : null,
       montant_total: totalGlobal,
       montant_assurance: montantAssurance,
       montant_patient: montantPatient,
@@ -174,12 +182,7 @@ function NouvelleFactureForm() {
       date_facture: new Date().toISOString(),
     };
 
-    const { error: factureError, data: facture } = await supabase
-      .from('factures')
-      .insert([factureData])
-      .select()
-      .single();
-
+    const { error: factureError, data: facture } = await supabase.from('factures').insert([factureData]).select().single();
     if (factureError || !facture) {
       console.error(factureError);
       setErrorMsg(`Erreur de création de la facture : ${explainDbError(factureError)}`);
@@ -187,23 +190,27 @@ function NouvelleFactureForm() {
       return;
     }
 
-    const { error: ligneError } = await supabase.from('lignes_facture').insert(
-      lignesValides.map((l) => ({
-        facture_id: facture.id,
-        description: l.description.trim(),
-        code_acte: l.code_acte || null,
-        quantite: l.quantite,
-        prix_unitaire: l.prix_unitaire,
-        montant: l.quantite * l.prix_unitaire,
-        couvert_assurance: tauxAssurance > 0,
-      }))
-    );
+    const rows = lignesValides.map((l) => ({
+      facture_id: facture.id,
+      description: l.description.trim(),
+      code_acte: l.code_acte || null,
+      quantite: l.quantite,
+      prix_unitaire: l.prix_unitaire,
+      montant: l.quantite * l.prix_unitaire,
+      couvert_assurance: tauxAssurance > 0,
+      ...(l.source_id ? { source_type: l.source_type, source_id: l.source_id } : {}),
+    }));
+    const { error: ligneError } = await supabase.from('lignes_facture').insert(rows);
     if (ligneError) {
       console.error(ligneError);
-      toast.error("Facture créée, mais certaines lignes n'ont pas pu être enregistrées.");
-    } else {
-      toast.success('Facture créée avec succès !');
+      // La facture sans lignes est annulée pour ne pas bloquer les prestations
+      await supabase.from('factures').update({ statut: 'annulée' }).eq('id', facture.id);
+      setErrorMsg(`Les lignes n'ont pas pu être enregistrées (facture annulée) : ${explainDbError(ligneError)}`);
+      setSaving(false);
+      return;
     }
+
+    toast.success('Facture créée avec succès !');
     router.push(`/facturation/${facture.id}`);
   };
 
@@ -216,7 +223,7 @@ function NouvelleFactureForm() {
           </button>
           <div>
             <h1 className="page-title">Nouvelle facture</h1>
-            <p className="page-subtitle">Création et émission d&apos;une facture détaillée</p>
+            <p className="page-subtitle">Consultations, médicaments, examens et séjours du patient sur une seule facture</p>
           </div>
         </div>
       </div>
@@ -227,18 +234,12 @@ function NouvelleFactureForm() {
         </div>
       )}
 
-      {origine && (
-        <div className="alert alert-info" style={{ marginBottom: 20 }}>
-          <Wand2 size={18} /> Prestations pré-remplies depuis : <strong>{origine}</strong>. Vérifiez les quantités et les prix avant de valider.
-        </div>
-      )}
-
-      {prefilling ? (
+      {resolving ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Loader2 size={24} className="animate-spin" /></div>
       ) : (
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ marginBottom: 20 }}>
-            <div className="card-header"><span className="card-title">Informations générales</span></div>
+            <div className="card-header"><span className="card-title">Patient</span></div>
             <div className="card-body">
               <div style={{ maxWidth: 600 }}>
                 <PatientSearch
@@ -246,11 +247,9 @@ function NouvelleFactureForm() {
                   value={selectedPatientId}
                   onChange={(id) => setSelectedPatientId(id)}
                   initialPatientId={initialPatientId}
-                  disabled={Boolean(consultationId || hospitalisationId)}
                 />
               </div>
-
-              <div className="form-group" style={{ marginTop: 8, maxWidth: 320 }}>
+              <div className="form-group" style={{ marginTop: 8, maxWidth: 320, marginBottom: 0 }}>
                 <label className="form-label">Taux de couverture assurance (%)</label>
                 <input
                   type="number"
@@ -270,13 +269,41 @@ function NouvelleFactureForm() {
             </div>
           </div>
 
+          {selectedPatientId && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div className="card-header">
+                <span className="card-title"><ListChecks size={16} /> Prestations en attente de facturation</span>
+              </div>
+              <div className="card-body" style={{ padding: 0 }}>
+                {elementsLoading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}><Loader2 size={20} className="animate-spin" /></div>
+                ) : elementsError ? (
+                  <div className="alert alert-warning" style={{ margin: 16 }}><AlertCircle size={18} /> {elementsError}</div>
+                ) : (
+                  <UnbilledItemsPanel
+                    elements={elements}
+                    selected={selected}
+                    onToggle={toggleElement}
+                    onToggleAll={toggleAll}
+                    priceOf={priceOf}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="card" style={{ marginBottom: 20 }}>
             <div className="card-header">
-              <span className="card-title">Détail des actes & prestations</span>
-              {actes.length === 0 && <span style={{ fontSize: 12, color: 'var(--neutral-500)' }}>Catalogue des tarifs indisponible</span>}
+              <span className="card-title"><PenLine size={16} /> Détail de la facture</span>
+              <span style={{ fontSize: 12, color: 'var(--neutral-500)' }}>Vous pouvez ajuster les prix et ajouter d&apos;autres actes</span>
             </div>
             <div className="card-body" style={{ padding: 0 }}>
-              <InvoiceLinesEditor lines={lignes} onChange={setLignes} actes={actes} />
+              {sansPrix.length > 0 && (
+                <div className="alert alert-warning" style={{ margin: 16 }}>
+                  <AlertCircle size={18} /> {sansPrix.length} prestation(s) sans prix : complétez le prix unitaire (ou ajoutez l&apos;acte dans Facturation → Tarifs).
+                </div>
+              )}
+              <InvoiceLinesEditor lines={lignes.length ? lignes : [newLine()]} onChange={setLignes} actes={actes} />
               <InvoiceTotals total={totalGlobal} tauxAssurance={tauxAssurance} montantAssurance={montantAssurance} />
             </div>
           </div>

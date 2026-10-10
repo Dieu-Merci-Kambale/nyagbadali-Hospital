@@ -3,7 +3,7 @@
 import { Plus, Trash2, BookOpen } from 'lucide-react';
 import type { ActeTarif } from '@/types';
 import { formatMoney, CATEGORIES_ACTES } from '@/lib/format';
-import { newLine, type InvoiceLine } from '@/lib/invoice';
+import { newLine, SOURCE_LABELS, type InvoiceLine } from '@/lib/invoice';
 
 type Props = {
   lines: InvoiceLine[];
@@ -76,7 +76,12 @@ export default function InvoiceLinesEditor({ lines, onChange, actes, disabled = 
                   disabled={disabled}
                   required
                 />
-                {ligne.code_acte && <div style={{ fontSize: 11, color: 'var(--neutral-400)', marginTop: 4, fontFamily: 'monospace' }}>{ligne.code_acte}</div>}
+                {(ligne.code_acte || ligne.source_type) && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
+                    {ligne.source_type && <span className="badge badge-info" style={{ fontSize: 10 }}>{SOURCE_LABELS[ligne.source_type]}</span>}
+                    {ligne.code_acte && <span style={{ fontSize: 11, color: 'var(--neutral-400)', fontFamily: 'monospace' }}>{ligne.code_acte}</span>}
+                  </div>
+                )}
               </td>
               <td>
                 <input

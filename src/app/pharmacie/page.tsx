@@ -153,45 +153,20 @@ export default function PharmacieHubPage() {
 
     setDispensing(prescriptionId);
 
-    // 1. Déduire le stock
-    const newStock = med.stock_actuel - qty;
-    let newStatus = med.statut;
-    if (newStock <= 0) newStatus = 'rupture';
+    // Stock, prescription et traçabilité mis à jour en une seule transaction côté base
+    // (deux délivrances simultanées ne peuvent pas fausser le stock)
+    const { error } = await supabase.rpc('delivrer_prescription', {
+      p_prescription_id: prescriptionId,
+      p_medicament_id: med.id,
+      p_quantite: qty,
+    });
 
-    const { error: stockErr } = await supabase
-      .from('medicaments')
-      .update({ stock_actuel: newStock, statut: newStatus })
-      .eq('id', med.id);
-
-    if (stockErr) {
-      toast.error("Erreur lors de la mise à jour du stock.");
+    if (error) {
+      toast.error(explainDbError(error));
       setDispensing(null);
+      await loadData();
       return;
     }
-
-    // 2. Mettre à jour la prescription
-    const { error: presErr } = await supabase
-      .from('prescriptions')
-      .update({ statut: 'dispensée' })
-      .eq('id', prescriptionId);
-
-    if (presErr) {
-      toast.error("Erreur lors de la mise à jour de la prescription.");
-      setDispensing(null);
-      return;
-    }
-
-    // 3. Traçabilité du mouvement (ignoré si la table n'existe pas encore)
-    await supabase.from('mouvements_stock').insert([{
-      medicament_id: med.id,
-      type: 'sortie',
-      quantite: -qty,
-      stock_avant: med.stock_actuel,
-      stock_apres: newStock,
-      motif: 'Délivrance sur ordonnance',
-      prescription_id: prescriptionId,
-      auteur_id: profile?.id || null,
-    }]);
 
     toast.success(`${qty} unité(s) de ${med.nom_commercial} délivrée(s).`);
     // Refresh
@@ -228,40 +203,23 @@ export default function PharmacieHubPage() {
       return;
     }
 
-    const stockApres = type === 'entrée' ? med.stock_actuel + q : type === 'ajustement' ? q : med.stock_actuel - q;
-    const delta = stockApres - med.stock_actuel;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const peremption = type === 'entrée' && stockForm.date_peremption ? stockForm.date_peremption : med.date_peremption;
-    const expired = peremption ? new Date(peremption) < today : false;
-    const statut = stockApres <= 0 ? 'rupture' : expired ? 'expiré' : 'disponible';
-
+    // Calcul, contrôle et traçabilité faits en une seule transaction côté base
     setSavingStock(true);
-    const patch: Record<string, unknown> = { stock_actuel: stockApres, statut };
-    if (type === 'entrée') {
-      if (stockForm.fournisseur.trim()) patch.fournisseur = stockForm.fournisseur.trim();
-      if (stockForm.date_peremption) patch.date_peremption = stockForm.date_peremption;
-    }
-    const { error } = await supabase.from('medicaments').update(patch).eq('id', med.id);
+    const { data: res, error } = await supabase.rpc('mouvement_stock', {
+      p_medicament_id: med.id,
+      p_type: type,
+      p_quantite: q,
+      p_motif: stockForm.motif.trim() || null,
+      p_reference: stockForm.reference.trim() || null,
+      p_fournisseur: type === 'entrée' ? stockForm.fournisseur.trim() || null : null,
+      p_date_peremption: type === 'entrée' && stockForm.date_peremption ? stockForm.date_peremption : null,
+    });
+    setSavingStock(false);
     if (error) {
-      setSavingStock(false);
       toast.error(explainDbError(error));
       return;
     }
-    const defaultMotif = type === 'entrée' ? 'Réapprovisionnement' : type === 'ajustement' ? 'Inventaire physique' : 'Retrait de produits périmés / avariés';
-    const { error: mvtError } = await supabase.from('mouvements_stock').insert([{
-      medicament_id: med.id,
-      type,
-      quantite: delta,
-      stock_avant: med.stock_actuel,
-      stock_apres: stockApres,
-      motif: stockForm.motif.trim() || defaultMotif,
-      reference: stockForm.reference.trim() || null,
-      auteur_id: profile?.id || null,
-    }]);
-    setSavingStock(false);
-    if (mvtError) toast.error(`Stock mis à jour, mais le mouvement n'a pas été tracé : ${explainDbError(mvtError)}`);
-    else toast.success(`Stock de ${med.nom_commercial} : ${med.stock_actuel} → ${stockApres}`);
+    toast.success(`Stock de ${med.nom_commercial} : ${res?.stock_avant ?? med.stock_actuel} → ${res?.stock_apres ?? '?'}`);
     setStockForm(null);
     loadData();
   };

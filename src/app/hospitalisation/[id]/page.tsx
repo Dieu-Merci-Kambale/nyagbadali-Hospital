@@ -129,24 +129,17 @@ export default function HospitalisationDetailPage() {
     const target = litsDispo.find((l) => l.id === newLitId);
     if (!target) return;
     setSaving(true);
-    const { error } = await supabase.from('hospitalisations').update({ lit_id: newLitId }).eq('id', id);
+    // Changement de lit, libération de l'ancien et note de suivi en une seule transaction
+    const { error } = await supabase.rpc('transferer_lit', {
+      p_hospitalisation_id: id,
+      p_nouveau_lit_id: newLitId,
+      p_note: `Transfert de lit : ${hosp.lits ? `Ch. ${hosp.lits.chambres?.numero} / ${hosp.lits.numero}` : 'aucun lit'} → Ch. ${target.chambres?.numero} / ${target.numero}`,
+    });
+    setSaving(false);
     if (error) {
-      setSaving(false);
       toast.error(explainDbError(error));
       return;
     }
-    await Promise.all([
-      supabase.from('lits').update({ statut: 'occupé' }).eq('id', newLitId),
-      hosp.lit_id ? supabase.from('lits').update({ statut: 'disponible' }).eq('id', hosp.lit_id) : Promise.resolve(),
-      supabase.from('suivis_hospitalisation').insert([{
-        hospitalisation_id: id,
-        auteur_id: profile?.id || null,
-        type: 'observation',
-        note: `Transfert de lit : ${hosp.lits ? `Ch. ${hosp.lits.chambres?.numero} / ${hosp.lits.numero}` : 'aucun lit'} → Ch. ${target.chambres?.numero} / ${target.numero}`,
-        date_suivi: new Date().toISOString(),
-      }]),
-    ]);
-    setSaving(false);
     setShowTransfer(false);
     toast.success('Patient transféré vers le nouveau lit.');
     load();
@@ -166,21 +159,8 @@ export default function HospitalisationDetailPage() {
     }
   };
 
-  const handleFacturer = async () => {
-    const { data } = await supabase.from('factures').select('id, numero_facture').eq('hospitalisation_id', id).neq('statut', 'annulée').limit(1);
-    if (data && data.length > 0) {
-      const ok = await confirm({
-        title: 'Séjour déjà facturé',
-        message: `La facture ${data[0].numero_facture} existe déjà pour ce séjour. Créer une facture complémentaire ?`,
-        confirmText: 'Créer une autre facture',
-        cancelText: 'Voir la facture existante',
-        type: 'warning',
-      });
-      if (!ok) {
-        router.push(`/facturation/${data[0].id}`);
-        return;
-      }
-    }
+  // Les journées déjà facturées sont déduites automatiquement par la base
+  const handleFacturer = () => {
     router.push(`/facturation/nouvelle?hospitalisation_id=${id}`);
   };
 
