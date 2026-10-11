@@ -60,7 +60,10 @@ export type Period = {
 export type ReportFilter = {
   key: string;
   label: string;
+  /** Choix fixes (ex. « Tous ») */
   options: { value: string; label: string }[];
+  /** Choix complémentaires chargés depuis la base (ex. liste du personnel) */
+  loadOptions?: () => Promise<{ value: string; label: string }[]>;
   defaultValue: string;
 };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Banknote, Users, BedDouble, Stethoscope, Pill, FlaskConical, Building2, FileText, FileSpreadsheet, Printer,
   Loader2, Play, AlertTriangle, ChevronRight, CalendarDays, Filter, Inbox, ArrowLeft,
@@ -70,6 +70,8 @@ export default function ReportsCenter({ title, subtitle, reportIds, backHref }: 
   const [debut, setDebut] = useState(defaultPeriodValue('periode').split('|')[0]);
   const [fin, setFin] = useState(defaultPeriodValue('periode').split('|')[1]);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  // Choix des filtres chargés depuis la base (par rapport puis par filtre)
+  const [dynOptions, setDynOptions] = useState<Record<string, { value: string; label: string }[]>>({});
 
   const [running, setRunning] = useState(false);
   const [exporting, setExporting] = useState<'' | 'pdf' | 'excel' | 'print'>('');
@@ -78,6 +80,22 @@ export default function ReportsCenter({ title, subtitle, reportIds, backHref }: 
 
   const effectiveMode: PeriodMode = mode || report?.defaultMode || 'mois';
   const years = Array.from({ length: 8 }, (_, i) => now.getFullYear() - i);
+
+  // Chargement des choix dynamiques du rapport sélectionné
+  const reportKey = report?.id;
+  useEffect(() => {
+    if (!report) return;
+    let ignore = false;
+    (report.filters || []).forEach((f) => {
+      const k = `${report.id}:${f.key}`;
+      if (!f.loadOptions || dynOptions[k]) return;
+      f.loadOptions().then((opts) => { if (!ignore) setDynOptions((prev) => ({ ...prev, [k]: opts })); }).catch(() => {});
+    });
+    return () => { ignore = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportKey]);
+
+  const optionsOf = (f: NonNullable<ReportDefinition['filters']>[number]) => [...f.options, ...(dynOptions[`${report?.id}:${f.key}`] || [])];
 
   const selectReport = (r: ReportDefinition) => {
     setReportId(r.id);
@@ -100,7 +118,7 @@ export default function ReportsCenter({ title, subtitle, reportIds, backHref }: 
   const filtersLabel = () => (report?.filters || [])
     .map((f) => {
       const v = filters[f.key] ?? f.defaultValue;
-      const opt = f.options.find((o) => o.value === v);
+      const opt = optionsOf(f).find((o) => o.value === v);
       return v && v !== 'tous' ? `${f.label} : ${opt?.label || v}` : '';
     })
     .filter(Boolean)
@@ -300,7 +318,7 @@ export default function ReportsCenter({ title, subtitle, reportIds, backHref }: 
                     <div key={f.key}>
                       <label className="form-label"><Filter size={13} style={{ display: 'inline', verticalAlign: 'middle' }} /> {f.label}</label>
                       <select className="form-select" value={filters[f.key] ?? f.defaultValue} onChange={(e) => setFilters({ ...filters, [f.key]: e.target.value })} style={{ width: 190 }}>
-                        {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        {optionsOf(f).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </div>
                   ))}

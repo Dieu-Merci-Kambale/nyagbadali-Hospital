@@ -3,7 +3,7 @@ import { LAB_STATUTS } from '@/lib/format';
 import { statutDemande } from '@/lib/lab-catalogue';
 import { roleLabels } from '@/lib/role-permissions';
 import type { ReportDefinition } from './types';
-import { fetchAll, iso, nom, docteur, sum, ratio, groupBy } from './helpers';
+import { fetchAll, iso, nom, docteur, sum, ratio, groupBy, formatCell } from './helpers';
 
 const LAB_ROLES: ReportDefinition['roles'] = ['super_admin', 'admin', 'medecin_chef', 'medecin', 'technicien_labo'];
 const heures = (a?: string | null, b?: string | null) => (a && b ? (new Date(b).getTime() - new Date(a).getTime()) / 3_600_000 : null);
@@ -192,39 +192,161 @@ export const ADMIN_REPORTS: ReportDefinition[] = [
     id: 'journal-activite',
     category: 'administration',
     title: "Journal d'activité",
-    description: 'Créations, modifications et suppressions effectuées par chaque utilisateur sur la période (traçabilité).',
+    description: 'Qui a fait quoi et quand : créations, modifications et suppressions, pour tout le personnel ou pour un membre précis.',
     roles: ['super_admin', 'admin'],
     period: 'periode',
     defaultMode: 'jour',
     orientation: 'landscape',
-    run: async ({ period }) => {
+    signatures: ['Le responsable du système', 'La direction'],
+    filters: [
+      {
+        key: 'utilisateur',
+        label: 'Personnel',
+        defaultValue: 'tous',
+        options: [{ value: 'tous', label: 'Tout le personnel' }],
+        // Liste de tous les membres du personnel (actifs ou non) pour retrouver aussi les anciens
+        loadOptions: async () => {
+          const { data } = await supabase.from('personnel').select('nom, prenom, email, role, statut').order('nom').order('prenom');
+          return (data || []).map((p: any) => ({
+            value: String(p.email).toLowerCase(),
+            label: `${nom(p)} — ${roleLabels[p.role as keyof typeof roleLabels] || p.role}${p.statut !== 'actif' ? ` (${p.statut})` : ''}`,
+          }));
+        },
+      },
+      {
+        key: 'action',
+        label: "Type d'action",
+        defaultValue: 'tous',
+        options: [
+          { value: 'tous', label: 'Toutes les actions' },
+          { value: 'INSERT', label: 'Créations' },
+          { value: 'UPDATE', label: 'Modifications' },
+          { value: 'DELETE', label: 'Suppressions' },
+        ],
+      },
+    ],
+    run: async ({ period, filters }) => {
       const p = period!;
-      const logs = await fetchAll((a, b) => supabase.from('audit_logs').select('timestamp, user_email, action, table_name, new_values, old_values')
-        .gte('timestamp', iso(p.from)).lte('timestamp', iso(p.to)).order('timestamp').range(a, b), 10000);
+      const utilisateur = filters.utilisateur && filters.utilisateur !== 'tous' ? filters.utilisateur : null;
+      const [logs, personnel] = await Promise.all([
+        fetchAll((a, b) => {
+          let q = supabase.from('audit_logs').select('timestamp, user_email, action, table_name, new_values, old_values')
+            .gte('timestamp', iso(p.from)).lte('timestamp', iso(p.to)).order('timestamp');
+          if (utilisateur) q = q.ilike('user_email', utilisateur);
+          if (filters.action && filters.action !== 'tous') q = q.eq('action', filters.action);
+          return q.range(a, b);
+        }, 20000),
+        fetchAll((a, b) => supabase.from('personnel').select('nom, prenom, email, role').range(a, b)),
+      ]);
+
       const ACTION: Record<string, string> = { INSERT: 'Création', UPDATE: 'Modification', DELETE: 'Suppression' };
+      const MODULE: Record<string, string> = {
+        patients: 'Patients', personnel: 'Personnel', departements: 'Départements', rendez_vous: 'Rendez-vous',
+        consultations: 'Consultations', prescriptions: 'Prescriptions', medicaments: 'Pharmacie (stock)',
+        hospitalisations: 'Hospitalisation', lits: 'Lits', chambres: 'Chambres', factures: 'Factures',
+        lignes_facture: 'Lignes de facture', paiements: 'Paiements', analyses_laboratoire: 'Laboratoire',
+        demandes_laboratoire: "Demandes d'examens", actes_tarifs: 'Tarifs',
+      };
+      const parEmail = new Map(personnel.map((x: any) => [String(x.email).toLowerCase(), x]));
+      const qui = (email?: string | null) => {
+        if (!email || email === 'système') return 'Système';
+        const x: any = parEmail.get(email.toLowerCase());
+        return x ? `${nom(x)} (${roleLabels[x.role as keyof typeof roleLabels] || x.role})` : email;
+      };
       const decrire = (l: any) => {
         const v = l.new_values || l.old_values || {};
-        return v.prenom && v.nom ? `${v.prenom} ${v.nom}` : v.numero_facture || v.numero || v.nom_commercial || v.nom_medicament || v.type_analyse || v.libelle || v.motif || v.motif_admission || v.nom || '';
+        return v.prenom && v.nom ? `${v.prenom} ${v.nom}` : v.numero_facture || v.numero || v.nom_commercial || v.nom_medicament || v.type_analyse || v.libelle || v.motif || v.motif_admission || (v.montant ? formatCell(Number(v.montant), 'money') : '') || v.nom || '';
       };
+      /** Champs modifiés lors d'une modification (avant → après) */
+      // Libellés lisibles des champs les plus courants
+      const CHAMP: Record<string, string> = {
+        statut: 'Statut', motif: 'Motif', diagnostic_principal: 'Diagnostic', diagnostic_entree: "Diagnostic d'entrée",
+        diagnostic_sortie: 'Diagnostic de sortie', resume_sortie: 'Résumé de sortie', date_heure: 'Date du RDV', date_sortie: 'Date de sortie',
+        date_prelevement: 'Date de prélèvement', date_resultat: 'Date du résultat', resultats: 'Résultats', observations: 'Observations',
+        montant: 'Montant', montant_total: 'Montant total', montant_patient: 'Net patient', montant_assurance: 'Part assurance',
+        prix: 'Prix', prix_unitaire: 'Prix unitaire', stock_actuel: 'Stock', stock_minimum: 'Seuil', date_peremption: 'Péremption',
+        role: 'Rôle', telephone: 'Téléphone', email: 'Email', nom: 'Nom', prenom: 'Prénom', adresse: 'Adresse', assureur: 'Assureur',
+        allergies: 'Allergies', antecedents: 'Antécédents', numero_queue: 'Ticket', duree_minutes: 'Durée', type: 'Type',
+        quantite: 'Quantité', description: 'Description', libelle: 'Libellé', actif: 'Actif', urgent: 'Urgent', lit_id: 'Lit',
+        medecin_id: 'Médecin', medecin_responsable_id: 'Médecin responsable', technicien_id: 'Technicien', notes_privees: 'Notes du médecin',
+        plan_traitement: 'Conduite à tenir', anamnese: 'Anamnèse', examen_physique: 'Examen physique', constantes: 'Constantes',
+        frequence: 'Fréquence', duree: 'Durée du traitement', dosage: 'Dosage', instructions: 'Instructions', specialite: 'Spécialité',
+      };
+      const MONTANTS = new Set(['montant', 'montant_total', 'montant_patient', 'montant_assurance', 'prix', 'prix_unitaire']);
+      const valeur = (k: string, x: unknown) => {
+        if (x === null || x === undefined || x === '') return '(vide)';
+        if (typeof x === 'boolean') return x ? 'oui' : 'non';
+        if (typeof x === 'object') return 'renseigné';
+        if (MONTANTS.has(k)) return formatCell(Number(x), 'money');
+        const s = String(x);
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return formatCell(s, 'datetime');
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return formatCell(s, 'date');
+        const t = s.replace(/_/g, ' ');
+        return t.length > 30 ? `${t.slice(0, 29)}…` : t;
+      };
+      /** Champs modifiés lors d'une modification, en français (avant > après) */
+      const changements = (l: any) => {
+        if (l.action !== 'UPDATE' || !l.old_values || !l.new_values) return '';
+        return Object.keys(l.new_values)
+          .filter((k) => !['updated_at', 'created_at', 'id'].includes(k) && JSON.stringify(l.old_values[k]) !== JSON.stringify(l.new_values[k]))
+          .map((k) => {
+            const label = CHAMP[k] || k.replace(/_id$/, '').replace(/_/g, ' ');
+            // Les identifiants techniques ne sont pas affichés : on signale seulement le changement
+            if (k.endsWith('_id')) return `${label} : modifié`;
+            if (typeof l.new_values[k] === 'object' && l.new_values[k] !== null) return `${label} : ${l.old_values[k] ? 'modifiés' : 'saisis'}`;
+            return `${label} : ${valeur(k, l.old_values[k])} > ${valeur(k, l.new_values[k])}`;
+          })
+          .join(' ; ');
+      };
+      const compte = (v: any[], action: string) => v.filter((l: any) => l.action === action).length;
+      const jours = new Set(logs.map((l: any) => new Date(l.timestamp).toDateString())).size;
+
+      const sections: any[] = [];
+      if (!utilisateur) {
+        sections.push({
+          title: 'Activité par membre du personnel',
+          columns: [
+            { header: 'Membre du personnel', width: 34 }, { header: 'Créations', type: 'number', width: 11 }, { header: 'Modifications', type: 'number', width: 12 },
+            { header: 'Suppressions', type: 'number', width: 11 }, { header: 'Total', type: 'number', width: 9 }, { header: 'Dernière action', type: 'datetime', width: 14 },
+          ],
+          rows: Array.from(groupBy(logs, (l: any) => qui(l.user_email)), ([k, v]) => [k, compte(v, 'INSERT'), compte(v, 'UPDATE'), compte(v, 'DELETE'), v.length, v[v.length - 1]?.timestamp])
+            .sort((a, b) => (b[4] as number) - (a[4] as number)),
+          totals: ['TOTAL', compte(logs, 'INSERT'), compte(logs, 'UPDATE'), compte(logs, 'DELETE'), logs.length, ''],
+        });
+      }
+      sections.push({
+        title: utilisateur ? 'Activité par module' : 'Activité par module (tout le personnel)',
+        columns: [{ header: 'Module', width: 34 }, { header: 'Créations', type: 'number', width: 14 }, { header: 'Modifications', type: 'number', width: 14 }, { header: 'Suppressions', type: 'number', width: 14 }, { header: 'Total', type: 'number', width: 14 }],
+        rows: Array.from(groupBy(logs, (l: any) => MODULE[l.table_name] || l.table_name), ([k, v]) => [k, compte(v, 'INSERT'), compte(v, 'UPDATE'), compte(v, 'DELETE'), v.length])
+          .sort((a, b) => (b[4] as number) - (a[4] as number)),
+        totals: ['TOTAL', compte(logs, 'INSERT'), compte(logs, 'UPDATE'), compte(logs, 'DELETE'), logs.length],
+      });
+      sections.push({
+        title: utilisateur ? `Chronologie des actions de ${qui(utilisateur)}` : 'Chronologie détaillée des actions',
+        columns: utilisateur
+          ? [{ header: 'Date & heure', type: 'datetime', width: 13 }, { header: 'Action', width: 11 }, { header: 'Module', width: 15 }, { header: 'Élément', width: 22 }, { header: 'Changements (avant > après)', width: 39 }]
+          : [{ header: 'Date & heure', type: 'datetime', width: 12 }, { header: 'Membre du personnel', width: 21 }, { header: 'Action', width: 10 }, { header: 'Module', width: 13 }, { header: 'Élément', width: 17 }, { header: 'Changements (avant > après)', width: 27 }],
+        rows: logs.map((l: any) => utilisateur
+          ? [l.timestamp, ACTION[l.action] || l.action, MODULE[l.table_name] || l.table_name, decrire(l), changements(l)]
+          : [l.timestamp, qui(l.user_email), ACTION[l.action] || l.action, MODULE[l.table_name] || l.table_name, decrire(l), changements(l)]),
+        highlightRows: logs.map((l: any, i: number) => (l.action === 'DELETE' ? i : -1)).filter((i: number) => i >= 0),
+        emptyText: utilisateur ? 'Aucune action de ce membre du personnel sur la période.' : 'Aucune activité sur la période.',
+      });
+
       return {
         kpis: [
           { label: 'Actions', value: logs.length, type: 'number' },
-          { label: 'Utilisateurs actifs', value: new Set(logs.map((l: any) => l.user_email)).size, type: 'number' },
-          { label: 'Suppressions', value: logs.filter((l: any) => l.action === 'DELETE').length, type: 'number' },
+          utilisateur
+            ? { label: 'Jours avec activité', value: jours, type: 'number' }
+            : { label: 'Membres du personnel actifs', value: new Set(logs.map((l: any) => l.user_email)).size, type: 'number' },
+          { label: 'Première action', value: logs[0] ? new Date(logs[0].timestamp).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—' },
+          { label: 'Dernière action', value: logs.length ? new Date(logs[logs.length - 1].timestamp).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—' },
+          { label: 'Suppressions', value: compte(logs, 'DELETE'), type: 'number', hint: 'Lignes surlignées dans la chronologie' },
         ],
-        sections: [
-          {
-            title: 'Actions par utilisateur',
-            columns: [{ header: 'Utilisateur', width: 40 }, { header: 'Créations', type: 'number', width: 15 }, { header: 'Modifications', type: 'number', width: 15 }, { header: 'Suppressions', type: 'number', width: 15 }, { header: 'Total', type: 'number', width: 15 }],
-            rows: Array.from(groupBy(logs, (l: any) => l.user_email || 'système'), ([k, v]) => [k, v.filter((l: any) => l.action === 'INSERT').length, v.filter((l: any) => l.action === 'UPDATE').length, v.filter((l: any) => l.action === 'DELETE').length, v.length]),
-          },
-          {
-            title: 'Détail des actions',
-            columns: [{ header: 'Date & heure', type: 'datetime', width: 14 }, { header: 'Utilisateur', width: 22 }, { header: 'Action', width: 12 }, { header: 'Module', width: 16 }, { header: 'Élément', width: 36 }],
-            rows: logs.map((l: any) => [l.timestamp, l.user_email || 'système', ACTION[l.action] || l.action, l.table_name, decrire(l)]),
-            highlightRows: logs.map((l: any, i: number) => (l.action === 'DELETE' ? i : -1)).filter((i: number) => i >= 0),
-            emptyText: 'Aucune activité sur la période.',
-          },
+        sections,
+        notes: [
+          'Le journal est enregistré automatiquement par la base de données et ne peut être ni modifié ni effacé.',
+          'Les modifications indiquent les champs changés avec leur valeur avant et après.',
         ],
       };
     },
