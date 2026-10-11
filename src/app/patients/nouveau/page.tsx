@@ -6,8 +6,25 @@ import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
+import AdminGuard from '@/components/AdminGuard';
+import { canManagePatients } from '@/lib/role-permissions';
+import type { RolePersonnel } from '@/types';
 
 export default function NouveauPatientPage() {
+  return (
+    <AdminGuard
+      allowed={(r) => canManagePatients(r as RolePersonnel)}
+      reservedTo="au personnel d'accueil, au personnel soignant et à l'administration"
+      operations="l'enregistrement et la modification des dossiers patients"
+      backHref="/patients"
+      backLabel="Retour aux patients"
+    >
+      <NouveauPatientForm />
+    </AdminGuard>
+  );
+}
+
+function NouveauPatientForm() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');

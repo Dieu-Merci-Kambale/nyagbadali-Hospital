@@ -90,6 +90,13 @@ const rolePermissions: Record<RolePersonnel, AppModule[]> = {
 // Fonctions utilitaires
 // =====================================================
 
+/** Rôles autorisés à créer et modifier les dossiers patients (les autres consultent seulement). */
+const PATIENT_EDITORS: RolePersonnel[] = ['super_admin', 'admin', 'medecin_chef', 'medecin', 'infirmier_chef', 'infirmier', 'receptionniste'];
+
+export function canManagePatients(role?: RolePersonnel | null): boolean {
+  return !!role && PATIENT_EDITORS.includes(role);
+}
+
 /**
  * Vérifie si un rôle donné a accès à un module spécifique.
  */

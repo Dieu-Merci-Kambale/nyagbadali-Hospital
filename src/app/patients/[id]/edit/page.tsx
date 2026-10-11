@@ -7,8 +7,25 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
 import type { Patient } from '@/types';
+import AdminGuard from '@/components/AdminGuard';
+import { canManagePatients } from '@/lib/role-permissions';
+import type { RolePersonnel } from '@/types';
 
 export default function EditPatientPage() {
+  return (
+    <AdminGuard
+      allowed={(r) => canManagePatients(r as RolePersonnel)}
+      reservedTo="au personnel d'accueil, au personnel soignant et à l'administration"
+      operations="l'enregistrement et la modification des dossiers patients"
+      backHref="/patients"
+      backLabel="Retour aux patients"
+    >
+      <EditPatientForm />
+    </AdminGuard>
+  );
+}
+
+function EditPatientForm() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;

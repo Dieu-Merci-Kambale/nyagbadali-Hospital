@@ -25,7 +25,7 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import MedicalAlerts from '@/components/patients/MedicalAlerts';
-import { hasAccess } from '@/lib/role-permissions';
+import { hasAccess, canManagePatients } from '@/lib/role-permissions';
 import {
   formatMoney, formatDate, formatTime, statusBadge, RDV_STATUTS, RDV_TYPES, HOSP_STATUTS, LAB_STATUTS, FACTURE_STATUTS, daysBetween,
 } from '@/lib/format';
@@ -143,6 +143,7 @@ export default function PatientDossierPage() {
   };
 
   const can = (module: Parameters<typeof hasAccess>[1]) => (profile ? hasAccess(profile.role, module) : false);
+  const canEdit = canManagePatients(profile?.role);
   const sejourActif = hospitalisations.find((h) => h.statut === 'actif');
   const prochainRdv = rendezVous
     .filter((r) => new Date(r.date_heure).getTime() >= Date.now() && !['annulé', 'absent', 'terminé'].includes(r.statut))
@@ -196,9 +197,11 @@ export default function PatientDossierPage() {
         </div>
 
         <div className="patient-actions">
-          <Link href={`/consultations/nouvelle?patient_id=${patient.id}`} className="btn btn-primary">
-            <Stethoscope size={16} /> Nouvelle Consultation
-          </Link>
+          {can('consultations') && (
+            <Link href={`/consultations/nouvelle?patient_id=${patient.id}`} className="btn btn-primary">
+              <Stethoscope size={16} /> Nouvelle Consultation
+            </Link>
+          )}
           {can('rendez-vous') && (
             <Link href={`/rendez-vous/nouveau?patient_id=${patient.id}`} className="btn btn-outline">
               <CalendarPlus size={16} /> Rendez-vous
@@ -219,12 +222,16 @@ export default function PatientDossierPage() {
               <CreditCard size={16} /> Facturer
             </Link>
           )}
-          <button type="button" className="btn btn-outline" onClick={handleDownloadPdf}>
-            <Printer size={16} /> Télécharger PDF
-          </button>
-          <Link href={`/patients/${patient.id}/edit`} className="btn btn-ghost" title="Modifier le dossier">
-            <Edit size={18} />
-          </Link>
+          {canEdit && (
+            <>
+              <button type="button" className="btn btn-outline" onClick={handleDownloadPdf}>
+                <Printer size={16} /> Télécharger PDF
+              </button>
+              <Link href={`/patients/${patient.id}/edit`} className="btn btn-ghost" title="Modifier le dossier">
+                <Edit size={18} />
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
@@ -233,19 +240,19 @@ export default function PatientDossierPage() {
         <button className={`tab ${activeTab === 'apercu' ? 'active' : ''}`} onClick={() => setActiveTab('apercu')}>
           <User size={16} style={{ display: 'inline', marginRight: 6 }} /> Aperçu
         </button>
-        <button className={`tab ${activeTab === 'consultations' ? 'active' : ''}`} onClick={() => setActiveTab('consultations')}>
+        <button className={`tab ${activeTab === 'consultations' ? 'active' : ''}`} onClick={() => setActiveTab('consultations')} style={{ display: can('consultations') ? undefined : 'none' }}>
           <Stethoscope size={16} style={{ display: 'inline', marginRight: 6 }} /> Consultations ({consultations.length})
         </button>
-        <button className={`tab ${activeTab === 'rdv' ? 'active' : ''}`} onClick={() => setActiveTab('rdv')}>
+        <button className={`tab ${activeTab === 'rdv' ? 'active' : ''}`} onClick={() => setActiveTab('rdv')} style={{ display: can('rendez-vous') ? undefined : 'none' }}>
           <Calendar size={16} style={{ display: 'inline', marginRight: 6 }} /> Rendez-vous ({rendezVous.length})
         </button>
-        <button className={`tab ${activeTab === 'hospitalisations' ? 'active' : ''}`} onClick={() => setActiveTab('hospitalisations')}>
+        <button className={`tab ${activeTab === 'hospitalisations' ? 'active' : ''}`} onClick={() => setActiveTab('hospitalisations')} style={{ display: can('hospitalisation') ? undefined : 'none' }}>
           <BedDouble size={16} style={{ display: 'inline', marginRight: 6 }} /> Hospitalisations ({hospitalisations.length})
         </button>
-        <button className={`tab ${activeTab === 'laboratoire' ? 'active' : ''}`} onClick={() => setActiveTab('laboratoire')}>
+        <button className={`tab ${activeTab === 'laboratoire' ? 'active' : ''}`} onClick={() => setActiveTab('laboratoire')} style={{ display: can('laboratoire') ? undefined : 'none' }}>
           <FlaskConical size={16} style={{ display: 'inline', marginRight: 6 }} /> Laboratoire ({analyses.length})
         </button>
-        <button className={`tab ${activeTab === 'factures' ? 'active' : ''}`} onClick={() => setActiveTab('factures')}>
+        <button className={`tab ${activeTab === 'factures' ? 'active' : ''}`} onClick={() => setActiveTab('factures')} style={{ display: can('facturation') ? undefined : 'none' }}>
           <CreditCard size={16} style={{ display: 'inline', marginRight: 6 }} /> Factures ({factures.length})
         </button>
       </div>
@@ -383,7 +390,7 @@ export default function PatientDossierPage() {
       )}
 
       {/* TAB: Consultations */}
-      {activeTab === 'consultations' && (
+      {activeTab === 'consultations' && can('consultations') && (
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span className="card-title">Historique des consultations</span>
@@ -434,7 +441,7 @@ export default function PatientDossierPage() {
       )}
 
       {/* TAB: Rendez-vous */}
-      {activeTab === 'rdv' && (
+      {activeTab === 'rdv' && can('rendez-vous') && (
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span className="card-title">Rendez-vous</span>
@@ -465,7 +472,7 @@ export default function PatientDossierPage() {
       )}
 
       {/* TAB: Hospitalisations */}
-      {activeTab === 'hospitalisations' && (
+      {activeTab === 'hospitalisations' && can('hospitalisation') && (
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span className="card-title">Séjours hospitaliers</span>
@@ -497,7 +504,7 @@ export default function PatientDossierPage() {
       )}
 
       {/* TAB: Laboratoire */}
-      {activeTab === 'laboratoire' && (
+      {activeTab === 'laboratoire' && can('laboratoire') && (
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span className="card-title">Examens de laboratoire</span>
@@ -532,7 +539,7 @@ export default function PatientDossierPage() {
       )}
 
       {/* TAB: Factures */}
-      {activeTab === 'factures' && (
+      {activeTab === 'factures' && can('facturation') && (
         <div className="card">
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span className="card-title">Historique de facturation</span>

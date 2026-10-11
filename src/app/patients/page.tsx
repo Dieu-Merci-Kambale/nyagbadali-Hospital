@@ -21,6 +21,17 @@ import {
 import { supabase } from '@/lib/supabase';
 import type { Patient } from '@/types';
 import { downloadCsv, formatDate } from '@/lib/format';
+import { Lock } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { canManagePatients } from '@/lib/role-permissions';
+import { RestrictionBanner } from '@/components/AdminGuard';
+
+const RESERVE = "Accès refusé : opération réservée à l'accueil, au personnel soignant et à l'administration";
+// Apparence uniforme des boutons verrouillés (grisés, sans effet au survol)
+const lockedStyle: React.CSSProperties = {
+  background: 'var(--neutral-100)', color: 'var(--neutral-400)', border: '1px solid var(--neutral-200)',
+  boxShadow: 'none', cursor: 'not-allowed', opacity: 1,
+};
 
 const PAGE_SIZE = 20;
 
@@ -37,6 +48,9 @@ function getAge(dateNaissance: string): number {
 const avatarColors = ['avatar-blue', 'avatar-green', 'avatar-orange', 'avatar-purple', 'avatar-pink'];
 
 export default function PatientsPage() {
+  const { profile } = useAuth();
+  // Le technicien de laboratoire consulte les patients sans pouvoir les enregistrer ni les modifier
+  const canEdit = canManagePatients(profile?.role);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -106,17 +120,34 @@ export default function PatientsPage() {
           <button className="btn btn-outline" onClick={() => setShowFilters(!showFilters)}>
             <Filter size={16} /> Filtres
           </button>
-          <button className="btn btn-outline" onClick={handleExport} disabled={loading || filtered.length === 0} title="Exporter la liste filtrée (CSV / Excel)">
-            <Download size={16} /> Exporter
-          </button>
-          <Link href="/patients/rapports" className="btn btn-outline">
-            <FileSpreadsheet size={16} /> Rapports
-          </Link>
-          <Link href="/patients/nouveau" className="btn btn-primary">
-            <UserPlus size={16} /> Nouveau Patient
-          </Link>
+          {canEdit && (
+            <>
+              <button className="btn btn-outline" onClick={handleExport} disabled={loading || filtered.length === 0} title="Exporter la liste filtrée (CSV / Excel)">
+                <Download size={16} /> Exporter
+              </button>
+              <Link href="/patients/rapports" className="btn btn-outline">
+                <FileSpreadsheet size={16} /> Rapports
+              </Link>
+            </>
+          )}
+          {canEdit ? (
+            <Link href="/patients/nouveau" className="btn btn-primary">
+              <UserPlus size={16} /> Nouveau Patient
+            </Link>
+          ) : (
+            <button type="button" className="btn" disabled aria-disabled="true" title={RESERVE} style={lockedStyle}>
+              <Lock size={16} /> Nouveau Patient
+            </button>
+          )}
         </div>
       </div>
+
+      {!canEdit && (
+        <RestrictionBanner>
+          Votre fonction vous permet de consulter l&apos;identité des patients dans le cadre des examens de laboratoire.
+          L&apos;enregistrement et la modification des dossiers patients relèvent de l&apos;accueil et du personnel soignant.
+        </RestrictionBanner>
+      )}
 
       {/* Search & Filters */}
       <div className="card" style={{ marginBottom: 20 }}>
@@ -194,7 +225,7 @@ export default function PatientsPage() {
                     <Inbox className="empty-state-icon" />
                     <h3>Aucun patient trouvé</h3>
                     <p>Commencez par enregistrer un nouveau patient dans le système.</p>
-                    <Link href="/patients/nouveau" className="btn btn-primary" style={{ marginTop: 16 }}>
+                    <Link href="/patients/nouveau" className="btn btn-primary" style={{ marginTop: 16, display: canEdit ? undefined : 'none' }}>
                       <UserPlus size={16} /> Ajouter un patient
                     </Link>
                   </div>
@@ -277,9 +308,15 @@ export default function PatientsPage() {
                       <Link href={`/patients/${patient.id}`} className="btn btn-ghost btn-sm" title="Voir le dossier">
                         <Eye size={14} />
                       </Link>
-                      <Link href={`/patients/${patient.id}/edit`} className="btn btn-ghost btn-sm" title="Modifier">
-                        <Edit size={14} />
-                      </Link>
+                      {canEdit ? (
+                        <Link href={`/patients/${patient.id}/edit`} className="btn btn-ghost btn-sm" title="Modifier">
+                          <Edit size={14} />
+                        </Link>
+                      ) : (
+                        <button type="button" className="btn btn-sm" disabled aria-disabled="true" title={RESERVE} style={lockedStyle}>
+                          <Lock size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
