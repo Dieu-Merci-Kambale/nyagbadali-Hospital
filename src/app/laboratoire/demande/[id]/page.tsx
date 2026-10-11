@@ -40,7 +40,9 @@ export default function DemandeLaboratoirePage() {
   const [ajout, setAjout] = useState<string[]>([]);
   const [ajoutAutre, setAjoutAutre] = useState('');
 
-  const canProcess = profile ? ['super_admin', 'medecin_chef', 'medecin', 'technicien_labo'].includes(profile.role) : false;
+  // Le traitement des analyses (prélèvement, résultats, validation, annulation) relève du laboratoire ;
+  // les médecins demandent les examens et consultent les résultats.
+  const canProcess = profile ? ['super_admin', 'technicien_labo'].includes(profile.role) : false;
   const canRequest = profile ? hasAccess(profile.role, 'laboratoire') : false;
 
   const load = useCallback(async () => {

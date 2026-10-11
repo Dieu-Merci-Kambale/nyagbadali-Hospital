@@ -62,7 +62,7 @@ const rolePermissions: Record<RolePersonnel, AppModule[]> = {
   ],
   medecin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'pharmacie', 'laboratoire', 'profil',
+    'chambres', 'laboratoire', 'profil',
   ],
   infirmier_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',

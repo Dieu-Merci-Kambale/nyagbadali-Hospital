@@ -32,6 +32,8 @@ export default function AnalyseDetailPage() {
   const { id } = useParams();
   const { profile } = useAuth();
   const { confirm } = useConfirm();
+  // Le traitement des analyses relève du laboratoire ; les médecins demandent et consultent les résultats.
+  const canProcess = profile ? ['super_admin', 'technicien_labo'].includes(profile.role) : false;
 
   const [analyse, setAnalyse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -198,7 +200,7 @@ export default function AnalyseDetailPage() {
   const stepIndex = STEPS.findIndex((s) => s.key === analyse.statut);
   const patient = analyse.patients || {};
   const age = getAge(patient.date_naissance);
-  const showForm = editing && !isAnnule;
+  const showForm = canProcess && editing && !isAnnule;
 
   return (
     <div className="animate-fade-in">
@@ -222,7 +224,7 @@ export default function AnalyseDetailPage() {
               <Printer size={16} /> Compte rendu PDF
             </button>
           )}
-          {!isTermine && !isAnnule && (
+          {canProcess && !isTermine && !isAnnule && (
             <button className="btn btn-outline" onClick={handleAnnuler} disabled={saving} style={{ color: 'var(--danger)' }}>
               <XCircle size={16} /> Annuler
             </button>
@@ -254,8 +256,13 @@ export default function AnalyseDetailPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Actions du circuit */}
-          {analyse.statut === 'demandé' && (
+          {/* Actions du circuit (laboratoire uniquement) */}
+          {!canProcess && !isTermine && !isAnnule && (
+            <div className="alert alert-info">
+              <Microscope size={16} /> Examen pris en charge par le laboratoire. Les résultats apparaîtront ici dès leur validation par le technicien.
+            </div>
+          )}
+          {canProcess && analyse.statut === 'demandé' && (
             <div className="alert alert-info" style={{ justifyContent: 'space-between' }}>
               <span>En attente de prélèvement sur le patient.</span>
               <button className="btn btn-primary btn-sm" onClick={handlePrelevement} disabled={saving}>
@@ -263,7 +270,7 @@ export default function AnalyseDetailPage() {
               </button>
             </div>
           )}
-          {analyse.statut === 'prélevé' && (
+          {canProcess && analyse.statut === 'prélevé' && (
             <div className="alert alert-info" style={{ justifyContent: 'space-between' }}>
               <span>Échantillon prélevé le {formatDateTime(analyse.date_prelevement)}.</span>
               <button className="btn btn-primary btn-sm" onClick={handleDemarrer} disabled={saving}>
@@ -276,7 +283,7 @@ export default function AnalyseDetailPage() {
           <div className="card">
             <div className="card-header">
               <span className="card-title"><Microscope size={16} /> Résultats</span>
-              {isTermine && !editing && (
+              {canProcess && isTermine && !editing && (
                 <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
                   <Edit size={14} /> Corriger
                 </button>
