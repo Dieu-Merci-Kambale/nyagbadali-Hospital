@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Lock, Loader2 } from 'lucide-react';
+import { ShieldAlert, Loader2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 /** Vrai pour les rôles autorisés à gérer le stock (fiches, entrées, ajustements, retraits). */
@@ -18,14 +18,23 @@ export default function StockAdminGuard({ children }: { children: React.ReactNod
   }
   if (!canManageStock(profile.role)) {
     return (
-      <div className="empty-state" style={{ marginTop: 40 }}>
-        <Lock className="empty-state-icon" />
-        <h3>Accès réservé à l&apos;administration</h3>
-        <p>
-          L&apos;ajout et la modification des médicaments, les entrées, les ajustements d&apos;inventaire et les retraits de stock
-          sont réservés au super administrateur et à l&apos;administrateur (séparation des tâches).
+      <div role="alert" style={{
+        maxWidth: 640, margin: '48px auto', padding: '32px 36px', textAlign: 'center',
+        background: 'var(--danger-50)', border: '1px solid var(--danger-200)', borderTop: '4px solid var(--danger-600)', borderRadius: 12,
+      }}>
+        <ShieldAlert size={44} style={{ color: 'var(--danger-600)', margin: '0 auto 12px' }} />
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--danger-600)' }}>Accès refusé</div>
+        <h3 style={{ margin: '6px 0 12px', fontSize: 20, color: 'var(--danger-600)' }}>Opération réservée à l&apos;administration</h3>
+        <p style={{ color: 'var(--neutral-700)', fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+          Vous ne disposez pas des autorisations nécessaires pour effectuer cette opération. Conformément à la politique de
+          contrôle interne de l&apos;établissement (séparation des tâches), l&apos;ajout et la modification des médicaments,
+          les entrées de stock, les ajustements d&apos;inventaire et les retraits sont exclusivement réservés au
+          super administrateur et à l&apos;administrateur.
         </p>
-        <Link href="/pharmacie" className="btn btn-outline" style={{ marginTop: 16 }}>Retour à la pharmacie</Link>
+        <p style={{ color: 'var(--neutral-500)', fontSize: 13, marginTop: 12 }}>
+          Pour toute demande, veuillez contacter l&apos;administration de l&apos;hôpital.
+        </p>
+        <Link href="/pharmacie" className="btn btn-outline" style={{ marginTop: 20 }}><ArrowLeft size={16} /> Retour à la pharmacie</Link>
       </div>
     );
   }

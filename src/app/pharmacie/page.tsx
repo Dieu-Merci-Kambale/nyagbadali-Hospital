@@ -52,8 +52,12 @@ export default function PharmacieHubPage() {
   // Séparation des tâches : seuls le super administrateur et l'administrateur gèrent le stock
   // (entrées, ajustements, retraits, fiches). Le pharmacien délivre les ordonnances.
   const canManageStock = profile?.role === 'super_admin' || profile?.role === 'admin';
-  const RESERVE = "Réservé à l'administration (super administrateur et administrateur)";
-  const lockedStyle: React.CSSProperties = canManageStock ? {} : { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'auto' };
+  const RESERVE = "Accès refusé : opération réservée au super administrateur et à l'administrateur";
+  // Apparence uniforme des boutons verrouillés (grisés, sans effet au survol)
+  const lockedStyle: React.CSSProperties = canManageStock ? {} : {
+    background: 'var(--neutral-100)', color: 'var(--neutral-400)', border: '1px solid var(--neutral-200)',
+    boxShadow: 'none', cursor: 'not-allowed', opacity: 1,
+  };
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'inventaire' | 'prescriptions' | 'mouvements'>('dashboard');
   const [mouvements, setMouvements] = useState<any[]>([]);
@@ -282,7 +286,7 @@ export default function PharmacieHubPage() {
                 <Plus size={16} /> Ajouter un Médicament
               </Link>
             ) : (
-              <button type="button" className="btn btn-primary" disabled title={canManageStock ? undefined : RESERVE} style={lockedStyle}>
+              <button type="button" className="btn" disabled aria-disabled="true" title={RESERVE} style={lockedStyle}>
                 <Lock size={16} /> Ajouter un Médicament
               </button>
             )
@@ -478,8 +482,16 @@ export default function PharmacieHubPage() {
       {activeTab === 'inventaire' && (
         <div className="animate-slide-up">
           {!canManageStock && (
-            <div className="alert alert-info" style={{ marginBottom: 16 }}>
-              <Lock size={18} /> Consultation seule : les entrées, ajustements, retraits et modifications de fiches sont réservés à l&apos;administration. Les délivrances se font depuis le « Comptoir de délivrance ».
+            <div className="alert alert-danger" role="alert" style={{ marginBottom: 16, alignItems: 'flex-start' }}>
+              <Lock size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <strong>Accès restreint — consultation seule.</strong>
+                <div style={{ marginTop: 4, fontSize: 13 }}>
+                  Conformément à la politique de contrôle interne de l&apos;établissement, les entrées de stock, ajustements d&apos;inventaire,
+                  retraits et modifications des fiches médicaments sont exclusivement réservés au super administrateur et à l&apos;administrateur.
+                  Les délivrances d&apos;ordonnances s&apos;effectuent depuis le « Comptoir de délivrance ».
+                </div>
+              </div>
             </div>
           )}
           <div className="card" style={{ marginBottom: 20 }}>
@@ -570,15 +582,21 @@ export default function PharmacieHubPage() {
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: 4 }}>
-                              <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)} disabled={!canManageStock} title={canManageStock ? 'Entrée, ajustement ou retrait de stock' : RESERVE} style={lockedStyle}>
-                                {canManageStock ? <PackagePlus size={14} /> : <Lock size={14} />} Stock
-                              </button>
+                              {canManageStock ? (
+                                <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)} title="Entrée, ajustement ou retrait de stock">
+                                  <PackagePlus size={14} /> Stock
+                                </button>
+                              ) : (
+                                <button type="button" className="btn btn-sm" disabled aria-disabled="true" title={RESERVE} style={lockedStyle}>
+                                  <Lock size={14} /> Stock
+                                </button>
+                              )}
                               {canManageStock ? (
                                 <Link href={`/pharmacie/${med.id}/edit`} className="btn btn-ghost btn-sm" style={{ padding: '6px 12px' }}>
                                   Éditer
                                 </Link>
                               ) : (
-                                <button type="button" className="btn btn-ghost btn-sm" disabled title={canManageStock ? undefined : RESERVE} style={{ padding: '6px 12px', ...lockedStyle }}>
+                                <button type="button" className="btn btn-sm" disabled aria-disabled="true" title={RESERVE} style={{ padding: '6px 12px', ...lockedStyle }}>
                                   Éditer
                                 </button>
                               )}
@@ -627,15 +645,21 @@ export default function PharmacieHubPage() {
                           </div>
                         )}
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, borderTop: '1px solid var(--neutral-100)', paddingTop: 12 }}>
-                          <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)} disabled={!canManageStock} title={canManageStock ? undefined : RESERVE} style={lockedStyle}>
-                            {canManageStock ? <PackagePlus size={14} /> : <Lock size={14} />} Stock
-                          </button>
+                          {canManageStock ? (
+                            <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)}>
+                              <PackagePlus size={14} /> Stock
+                            </button>
+                          ) : (
+                            <button type="button" className="btn btn-sm" disabled aria-disabled="true" title={RESERVE} style={lockedStyle}>
+                              <Lock size={14} /> Stock
+                            </button>
+                          )}
                           {canManageStock ? (
                             <Link href={`/pharmacie/${med.id}/edit`} className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-600)' }}>
                               Mettre à jour
                             </Link>
                           ) : (
-                            <button type="button" className="btn btn-ghost btn-sm" disabled title={canManageStock ? undefined : RESERVE} style={lockedStyle}>
+                            <button type="button" className="btn btn-sm" disabled aria-disabled="true" title={RESERVE} style={lockedStyle}>
                               Mettre à jour
                             </button>
                           )}
