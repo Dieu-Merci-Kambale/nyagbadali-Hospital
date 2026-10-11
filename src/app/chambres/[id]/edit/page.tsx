@@ -5,8 +5,17 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
+import AdminGuard from '@/components/AdminGuard';
 
 export default function EditChambrePage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <AdminGuard operations="la création et la modification des chambres et des lits" backHref="/chambres" backLabel="Retour aux chambres">
+      <EditChambreForm params={params} />
+    </AdminGuard>
+  );
+}
+
+function EditChambreForm({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const { id } = resolvedParams;
   const router = useRouter();

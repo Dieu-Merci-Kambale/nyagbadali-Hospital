@@ -11,11 +11,25 @@ import {
   Inbox,
   LayoutGrid,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Lock,
+  Eye
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { isAdminRole, RestrictionBanner } from '@/components/AdminGuard';
+
+const RESERVE = "Accès refusé : opération réservée au super administrateur et à l'administrateur";
+// Apparence uniforme des boutons verrouillés (grisés, sans effet au survol)
+const lockedStyle: React.CSSProperties = {
+  background: 'var(--neutral-100)', color: 'var(--neutral-400)', border: '1px solid var(--neutral-200)',
+  boxShadow: 'none', cursor: 'not-allowed', opacity: 1,
+};
 
 export default function ChambresPage() {
+  const { profile } = useAuth();
+  // Séparation des tâches : seuls le super administrateur et l'administrateur configurent l'hébergement
+  const canManage = isAdminRole(profile?.role);
   const [chambres, setChambres] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -81,12 +95,26 @@ export default function ChambresPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Chambres & Lits</h1>
-          <p className="page-subtitle">Gérez la configuration de l'hébergement hospitalier</p>
+          <p className="page-subtitle">{canManage ? "Gérez la configuration de l'hébergement hospitalier" : "Consultez l'hébergement hospitalier"}</p>
         </div>
-        <Link href="/chambres/nouvelle" className="btn btn-primary">
-          <Plus size={16} /> Nouvelle Chambre
-        </Link>
+        {canManage ? (
+          <Link href="/chambres/nouvelle" className="btn btn-primary">
+            <Plus size={16} /> Nouvelle Chambre
+          </Link>
+        ) : (
+          <button type="button" className="btn" disabled aria-disabled="true" title={RESERVE} style={lockedStyle}>
+            <Lock size={16} /> Nouvelle Chambre
+          </button>
+        )}
       </div>
+
+      {!canManage && (
+        <RestrictionBanner>
+          Conformément à la politique de contrôle interne de l&apos;établissement, la création et la modification des chambres
+          et des lits (ajout, suppression, mise en maintenance) sont exclusivement réservées au super administrateur et à
+          l&apos;administrateur. L&apos;occupation des lits se met à jour automatiquement lors des admissions, transferts et sorties.
+        </RestrictionBanner>
+      )}
 
       {/* Statistiques */}
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
@@ -145,9 +173,11 @@ export default function ChambresPage() {
               <Inbox className="empty-state-icon" />
               <h3>Aucune chambre trouvée</h3>
               <p>Aucune chambre ne correspond à votre recherche ou la base est vide.</p>
-              <Link href="/chambres/nouvelle" className="btn btn-primary" style={{ marginTop: 16 }}>
-                Créer une chambre
-              </Link>
+              {canManage && (
+                <Link href="/chambres/nouvelle" className="btn btn-primary" style={{ marginTop: 16 }}>
+                  Créer une chambre
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -184,9 +214,15 @@ export default function ChambresPage() {
                       </span>
                     </td>
                     <td>
-                      <Link href={`/chambres/${c.id}/edit`} className="btn btn-sm btn-outline">
-                        <Edit size={14} style={{ marginRight: 6 }} /> Gérer la chambre
-                      </Link>
+                      {canManage ? (
+                        <Link href={`/chambres/${c.id}/edit`} className="btn btn-sm btn-outline">
+                          <Edit size={14} style={{ marginRight: 6 }} /> Gérer la chambre
+                        </Link>
+                      ) : (
+                        <button type="button" className="btn btn-sm" disabled aria-disabled="true" title={RESERVE} style={lockedStyle}>
+                          <Lock size={14} style={{ marginRight: 6 }} /> Gérer la chambre
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

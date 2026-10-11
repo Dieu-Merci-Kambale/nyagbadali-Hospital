@@ -100,18 +100,8 @@ export default function EditHospitalisationPage() {
         throw hospError;
       }
 
-      // 2. Si sortie, libérer le lit
-      if (isSortie && hosp.statut === 'actif' && hosp.lit_id) {
-        const { error: litError } = await supabase
-          .from('lits')
-          .update({ statut: 'disponible' })
-          .eq('id', hosp.lit_id);
-          
-        if (litError) {
-          console.error("Erreur lors de la libération du lit", litError);
-          // On ne bloque pas pour ça, mais en prod on loggerait ça
-        }
-      }
+      // 2. À la sortie, le lit est libéré automatiquement par la base
+      //    (déclencheur liberer_lit_a_la_sortie, migration 20261011_chambres_administration.sql)
 
       router.push(`/hospitalisation/${id}`);
     } catch (err: any) {

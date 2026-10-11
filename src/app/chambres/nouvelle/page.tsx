@@ -5,8 +5,17 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
+import AdminGuard from '@/components/AdminGuard';
 
 export default function NouvelleChambrePage() {
+  return (
+    <AdminGuard operations="la création et la modification des chambres et des lits" backHref="/chambres" backLabel="Retour aux chambres">
+      <NouvelleChambreForm />
+    </AdminGuard>
+  );
+}
+
+function NouvelleChambreForm() {
   const router = useRouter();
   const { confirm } = useConfirm();
   
