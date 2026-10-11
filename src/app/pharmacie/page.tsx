@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   History,
   PackagePlus,
+  Lock,
   Download,
   FileSpreadsheet,
 } from 'lucide-react';
@@ -48,6 +49,11 @@ type StockForm = {
 export default function PharmacieHubPage() {
   const { confirm } = useConfirm();
   const { profile } = useAuth();
+  // Séparation des tâches : seuls le super administrateur et l'administrateur gèrent le stock
+  // (entrées, ajustements, retraits, fiches). Le pharmacien délivre les ordonnances.
+  const canManageStock = profile?.role === 'super_admin' || profile?.role === 'admin';
+  const RESERVE = "Réservé à l'administration (super administrateur et administrateur)";
+  const lockedStyle: React.CSSProperties = canManageStock ? {} : { opacity: 0.45, cursor: 'not-allowed', pointerEvents: 'auto' };
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'inventaire' | 'prescriptions' | 'mouvements'>('dashboard');
   const [mouvements, setMouvements] = useState<any[]>([]);
@@ -180,6 +186,10 @@ export default function PharmacieHubPage() {
   };
 
   const openStockForm = (med: Medicament, type: StockForm['type'] = 'entrée') => {
+    if (!canManageStock) {
+      toast.error(RESERVE);
+      return;
+    }
     setStockForm({
       med,
       type,
@@ -267,9 +277,15 @@ export default function PharmacieHubPage() {
             <FileSpreadsheet size={16} /> Rapports
           </Link>
           {activeTab === 'inventaire' && (
-            <Link href="/pharmacie/nouveau" className="btn btn-primary">
-              <Plus size={16} /> Ajouter un Médicament
-            </Link>
+            canManageStock ? (
+              <Link href="/pharmacie/nouveau" className="btn btn-primary">
+                <Plus size={16} /> Ajouter un Médicament
+              </Link>
+            ) : (
+              <button type="button" className="btn btn-primary" disabled title={canManageStock ? undefined : RESERVE} style={lockedStyle}>
+                <Lock size={16} /> Ajouter un Médicament
+              </button>
+            )
           )}
         </div>
       </div>
@@ -461,6 +477,11 @@ export default function PharmacieHubPage() {
       {/* TAB: INVENTAIRE */}
       {activeTab === 'inventaire' && (
         <div className="animate-slide-up">
+          {!canManageStock && (
+            <div className="alert alert-info" style={{ marginBottom: 16 }}>
+              <Lock size={18} /> Consultation seule : les entrées, ajustements, retraits et modifications de fiches sont réservés à l&apos;administration. Les délivrances se font depuis le « Comptoir de délivrance ».
+            </div>
+          )}
           <div className="card" style={{ marginBottom: 20 }}>
             <div className="card-body" style={{ padding: '14px 22px' }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -549,12 +570,18 @@ export default function PharmacieHubPage() {
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: 4 }}>
-                              <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)} title="Entrée, ajustement ou retrait de stock">
-                                <PackagePlus size={14} /> Stock
+                              <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)} disabled={!canManageStock} title={canManageStock ? 'Entrée, ajustement ou retrait de stock' : RESERVE} style={lockedStyle}>
+                                {canManageStock ? <PackagePlus size={14} /> : <Lock size={14} />} Stock
                               </button>
-                              <Link href={`/pharmacie/${med.id}/edit`} className="btn btn-ghost btn-sm" style={{ padding: '6px 12px' }}>
-                                Éditer
-                              </Link>
+                              {canManageStock ? (
+                                <Link href={`/pharmacie/${med.id}/edit`} className="btn btn-ghost btn-sm" style={{ padding: '6px 12px' }}>
+                                  Éditer
+                                </Link>
+                              ) : (
+                                <button type="button" className="btn btn-ghost btn-sm" disabled title={canManageStock ? undefined : RESERVE} style={{ padding: '6px 12px', ...lockedStyle }}>
+                                  Éditer
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -600,12 +627,18 @@ export default function PharmacieHubPage() {
                           </div>
                         )}
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, borderTop: '1px solid var(--neutral-100)', paddingTop: 12 }}>
-                          <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)}>
-                            <PackagePlus size={14} /> Stock
+                          <button className="btn btn-outline btn-sm" onClick={() => openStockForm(med)} disabled={!canManageStock} title={canManageStock ? undefined : RESERVE} style={lockedStyle}>
+                            {canManageStock ? <PackagePlus size={14} /> : <Lock size={14} />} Stock
                           </button>
-                          <Link href={`/pharmacie/${med.id}/edit`} className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-600)' }}>
-                            Mettre à jour
-                          </Link>
+                          {canManageStock ? (
+                            <Link href={`/pharmacie/${med.id}/edit`} className="btn btn-ghost btn-sm" style={{ color: 'var(--primary-600)' }}>
+                              Mettre à jour
+                            </Link>
+                          ) : (
+                            <button type="button" className="btn btn-ghost btn-sm" disabled title={canManageStock ? undefined : RESERVE} style={lockedStyle}>
+                              Mettre à jour
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

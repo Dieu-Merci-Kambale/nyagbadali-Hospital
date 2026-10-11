@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
+import StockAdminGuard from "@/components/pharmacie/StockAdminGuard";
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function NouveauMedicamentPage() {
+function NouveauMedicamentPageForm() {
   const router = useRouter();
   
   const [saving, setSaving] = useState(false);
@@ -201,5 +202,14 @@ export default function NouveauMedicamentPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+// Réservé au super administrateur et à l'administrateur (séparation des tâches)
+export default function NouveauMedicamentPage() {
+  return (
+    <StockAdminGuard>
+      <NouveauMedicamentPageForm />
+    </StockAdminGuard>
   );
 }

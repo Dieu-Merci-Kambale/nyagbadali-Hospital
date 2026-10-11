@@ -5,9 +5,10 @@ import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
+import StockAdminGuard from "@/components/pharmacie/StockAdminGuard";
 import type { Medicament } from '@/types';
 
-export default function EditMedicamentPage() {
+function EditMedicamentPageForm() {
   const router = useRouter();
   const { id } = useParams();
   
@@ -228,5 +229,14 @@ export default function EditMedicamentPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+// Réservé au super administrateur et à l'administrateur (séparation des tâches)
+export default function EditMedicamentPage() {
+  return (
+    <StockAdminGuard>
+      <EditMedicamentPageForm />
+    </StockAdminGuard>
   );
 }
