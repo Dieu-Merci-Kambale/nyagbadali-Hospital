@@ -14,6 +14,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { roleLabels } from '@/lib/role-permissions';
 import { buildLaboratoryDocumentPdf } from '@/lib/document-models';
 import { findExamen } from '@/lib/lab-catalogue';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { LAB_STATUTS, statusBadge, formatDateTime, getAge, explainDbError } from '@/lib/format';
 import type { ParametreAnalyse } from '@/types';
 
@@ -58,6 +59,10 @@ export default function AnalyseDetailPage() {
       console.error(error);
       toast.error(explainDbError(error));
       setAnalyse(null);
+    } else if (data.demande_id) {
+      // Les examens sont gérés par demande : ouverture de la demande sur cet examen
+      router.replace(`/laboratoire/demande/${data.demande_id}#analyse-${data.id}`);
+      return;
     } else {
       setAnalyse(data);
       const saved: ParametreAnalyse[] = data.resultats?.parametres || [];
@@ -68,11 +73,13 @@ export default function AnalyseDetailPage() {
       setEditing(data.statut === 'en_cours');
     }
     setLoading(false);
-  }, [id]);
+  }, [id, router]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useLiveRefresh(() => { if (!editing && !saving) load(); }, ['analyses_laboratoire'], { filter: id ? `id=eq.${id}` : undefined });
 
   const update = async (patch: Record<string, unknown>, successMsg: string) => {
     setSaving(true);

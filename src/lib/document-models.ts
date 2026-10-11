@@ -45,6 +45,15 @@ export type LaboratoryDocumentModel = {
   printedAt?: string | Date;
 };
 
+export type LabRequestDocumentModel = {
+  /** Demande avec patients(*), personnel (prescripteur) */
+  demande: any;
+  /** Examens de la demande (resultats, statut, technicien...) */
+  analyses: any[];
+  printedBy?: PrintedBy;
+  printedAt?: string | Date;
+};
+
 export type AppointmentDocumentModel = {
   rendezVous: any;
   printedBy?: PrintedBy;
@@ -310,8 +319,8 @@ class DocumentKit {
     this.bottom = this.footerTop - 3;
   }
 
-  static async create() {
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  static async create(orientation: 'portrait' | 'landscape' = 'portrait') {
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation });
     const logo = await loadLogo();
     return new DocumentKit(doc, logo);
   }
@@ -619,23 +628,38 @@ class DocumentKit {
   }
 
   /** Tableau avec en-tête marine, lignes zébrées et en-tête répété en cas de saut de page. */
-  table(columns: Column[], rows: string[][], options: { emptyText?: string; highlightRow?: number; dangerRows?: number[] } = {}) {
+  table(
+    columns: Column[],
+    rows: string[][],
+    options: { emptyText?: string; highlightRow?: number; dangerRows?: number[]; warnRows?: number[]; totalRow?: string[]; fontSize?: number } = {}
+  ) {
     const { doc, margin, contentWidth } = this;
     const totalW = columns.reduce((s, c) => s + c.width, 0);
     const widths = columns.map((c) => (c.width / totalW) * contentWidth);
-    const pad = 3;
+    const fs = options.fontSize ?? 8.8;
+    const pad = fs < 8.5 ? 2.2 : 3;
+    const lineH = fs * 0.477;
+
+    // En-têtes : une ligne avec espacement si la place suffit, sinon retour à la ligne
+    this.font('bold', 7.3);
+    const headLines = columns.map((col, i) => {
+      const t = col.header.toUpperCase();
+      return doc.getTextWidth(t) + 0.3 * t.length <= widths[i] - pad * 2 ? [t] : this.wrap(t, widths[i] - pad * 2);
+    });
+    const headH = Math.max(...headLines.map((l) => l.length)) * 3.3 + 4.7;
 
     const drawHead = () => {
       this.fill(NAVY);
-      doc.roundedRect(margin, this.y - 4.5, contentWidth, 8, 1.5, 1.5, 'F');
+      doc.roundedRect(margin, this.y - 4.5, contentWidth, headH, 1.5, 1.5, 'F');
       let x = margin;
       this.color([255, 255, 255]).font('bold', 7.3);
       columns.forEach((col, i) => {
         const tx = col.align === 'right' ? x + widths[i] - pad : col.align === 'center' ? x + widths[i] / 2 : x + pad;
-        this.spaced(col.header.toUpperCase(), tx, this.y, 0.3, col.align || 'left');
+        if (headLines[i].length === 1) this.spaced(headLines[i][0], tx, this.y, 0.3, col.align || 'left');
+        else doc.text(headLines[i], tx, this.y, { align: col.align || 'left', lineHeightFactor: 1.15 });
         x += widths[i];
       });
-      this.y += 7;
+      this.y += headH - 1;
     };
 
     this.ensure(18);
@@ -649,14 +673,17 @@ class DocumentKit {
     }
 
     rows.forEach((row, r) => {
-      this.font('normal', 8.8);
+      this.font('normal', fs);
       const cells = row.map((cell, i) => this.wrap(cell || '—', widths[i] - pad * 2));
       const lines = Math.max(...cells.map((c) => c.length));
-      const h = 3.5 + lines * 4.2;
+      const h = 3.5 + lines * lineH;
       if (this.ensure(h + 2)) drawHead();
 
       if (options.highlightRow === r) {
         this.fill([224, 242, 246]);
+        doc.rect(margin, this.y - 4.2, contentWidth, h, 'F');
+      } else if (options.warnRows?.includes(r)) {
+        this.fill([254, 243, 226]);
         doc.rect(margin, this.y - 4.2, contentWidth, h, 'F');
       } else if (r % 2 === 1) {
         this.fill(SOFT);
@@ -668,7 +695,7 @@ class DocumentKit {
         const col = columns[i];
         const tx = col.align === 'right' ? x + widths[i] - pad : col.align === 'center' ? x + widths[i] / 2 : x + pad;
         const danger = options.dangerRows?.includes(r) && i > 0;
-        this.color(danger ? DANGER : i === 0 ? INK : BODY).font(i === 0 || danger ? 'bold' : 'normal', 8.8);
+        this.color(danger ? DANGER : i === 0 ? INK : BODY).font(i === 0 || danger ? 'bold' : 'normal', fs);
         doc.text(cellLines, tx, this.y, { align: col.align || 'left' });
         x += widths[i];
       });
@@ -677,6 +704,27 @@ class DocumentKit {
       doc.line(margin, this.y - 4.2 + h, margin + contentWidth, this.y - 4.2 + h);
       this.y += h;
     });
+
+    // Ligne de total
+    if (options.totalRow) {
+      this.font('bold', fs);
+      const cells = options.totalRow.map((cell, i) => this.wrap(cell || '', widths[i] - pad * 2));
+      const h = 4 + Math.max(...cells.map((c) => c.length)) * lineH;
+      if (this.ensure(h + 2)) drawHead();
+      this.fill([226, 236, 245]);
+      doc.rect(margin, this.y - 4.2, contentWidth, h, 'F');
+      this.stroke(NAVY, 0.4);
+      doc.line(margin, this.y - 4.2, margin + contentWidth, this.y - 4.2);
+      let x = margin;
+      cells.forEach((cellLines, i) => {
+        const col = columns[i];
+        const tx = col.align === 'right' ? x + widths[i] - pad : col.align === 'center' ? x + widths[i] / 2 : x + pad;
+        this.color(NAVY).font('bold', fs);
+        doc.text(cellLines, tx, this.y + 0.3, { align: col.align || 'left' });
+        x += widths[i];
+      });
+      this.y += h;
+    }
     this.y += 6;
   }
 
@@ -741,8 +789,9 @@ class DocumentKit {
     const { doc, margin, contentWidth } = this;
     const blockH = 38;
     // Le bloc peut remonter sur l'espacement laissé par le bloc précédent
-    if (this.y - 8 + blockH > this.bottom) this.newPage();
-    const top = Math.max(this.y - 8, this.bottom - blockH);
+    // Le bloc peut empiéter légèrement sur la marge basse (il reste au-dessus du pied de page)
+    if (this.y - 8 + blockH > this.bottom + 4) this.newPage();
+    const top = Math.max(this.y - 8, Math.min(this.bottom + 4, this.footerTop - 2) - blockH);
 
     if (options.leftNote && boxes.length === 1) {
       this.color(INK).font('normal', 9.5);
@@ -1101,6 +1150,92 @@ export async function buildPaymentReceiptPdf(model: PaymentReceiptModel) {
 }
 
 // =====================================================
+// Rapports du centre de rapports (finances, patients, pharmacie...)
+// =====================================================
+
+export type ReportPdfColumn = { header: string; width: number; align?: 'left' | 'center' | 'right' };
+
+export type ReportPdfModel = {
+  title: string;
+  /** Libellé de la période, ex. « Mois d'octobre 2026 » ou « Situation au 11/10/2026 » */
+  periodLabel: string;
+  service: string;
+  orientation?: 'portrait' | 'landscape';
+  /** Filtres appliqués, ex. « Statut : actifs » */
+  filtersLabel?: string;
+  kpis?: { label: string; value: string }[];
+  sections: {
+    title: string;
+    columns: ReportPdfColumn[];
+    rows: string[][];
+    totals?: string[];
+    highlightRows?: number[];
+    emptyText?: string;
+  }[];
+  notes?: string[];
+  signatures?: string[];
+  printedBy?: PrintedBy;
+  printedAt?: string | Date;
+};
+
+export async function buildReportPdf(model: ReportPdfModel) {
+  const kit = await DocumentKit.create(model.orientation || 'portrait');
+  const generated = new Date(model.printedAt || Date.now());
+  const ref = shortRef('RAP', Math.random().toString(16).slice(2), generated);
+
+  kit.letterhead({
+    title: model.title.toUpperCase(),
+    meta: `${model.periodLabel}${model.filtersLabel ? `   •   ${model.filtersLabel}` : ''}`,
+    service: model.service,
+    right: { heading: 'Rapport officiel', sub: `Édité le ${formatDate(generated, 'long')}`, caption: `Réf. ${ref}` },
+    shortTitle: model.title,
+    reference: `${model.periodLabel}  •  Réf. ${ref}`,
+  });
+
+  if (model.kpis?.length) {
+    kit.y += 4;
+    kit.tiles(model.kpis.map((k) => ({ label: k.label, value: k.value })));
+  }
+
+  // Tableaux denses : police plus petite au-delà de 7 colonnes
+  model.sections.forEach((s) => {
+    kit.section(s.title);
+    kit.table(
+      s.columns.map((c) => ({ header: c.header, width: c.width, align: c.align })),
+      s.rows,
+      {
+        emptyText: s.emptyText,
+        totalRow: s.totals,
+        warnRows: s.highlightRows,
+        fontSize: s.columns.length > 7 ? 7.6 : s.columns.length > 5 ? 8.2 : 8.8,
+      }
+    );
+  });
+
+  if (model.notes?.length) {
+    kit.section('Remarques');
+    model.notes.forEach((n) => {
+      kit.paragraph(`• ${n}`, { size: 8.5, color: MUTED });
+      kit.y -= 2.5;
+    });
+  }
+
+  if (model.signatures?.length) {
+    const printedByName = [model.printedBy?.prenom, model.printedBy?.nom].filter(Boolean).join(' ');
+    kit.signatures(
+      model.signatures.slice(0, 2).map((title, i) => ({ title, name: i === 0 ? printedByName || undefined : undefined })),
+      { leftNote: [`Établi le ${formatDate(generated, 'long')}`, `Réf. ${ref}`] }
+    );
+  }
+
+  return kit.finish({
+    notice: `${HOSPITAL_NAME}  •  ${model.title}  •  Document à usage interne`,
+    printedBy: model.printedBy,
+    printedAt: model.printedAt,
+  });
+}
+
+// =====================================================
 // 4. Bulletin d'admission
 // =====================================================
 
@@ -1218,6 +1353,26 @@ export async function buildLaboratoryDocumentPdf(model: LaboratoryDocumentModel)
   }
 
   kit.section('Résultats');
+  renderLabResults(kit, analyse);
+
+  if (analyse.observations) {
+    kit.section('Interprétation & observations');
+    kit.paragraph(analyse.observations);
+  }
+
+  kit.signatures([{ title: 'Le biologiste / technicien', name: fullName(analyse?.technicien) || undefined }], {
+    leftNote: [`Validé le ${analyse.date_resultat ? formatDate(analyse.date_resultat, 'long') : '—'}`, `Réf. ${ref}`],
+  });
+
+  return kit.finish({
+    notice: "Résultats à interpréter par le médecin prescripteur en fonction du contexte clinique  •  Document confidentiel",
+    printedBy,
+    printedAt,
+  });
+}
+
+/** Tableau des paramètres, conclusion et anomalies d'un examen. */
+function renderLabResults(kit: DocumentKit, analyse: any) {
   const resultats = analyse?.resultats;
   const parametres: any[] = Array.isArray(resultats?.parametres)
     ? resultats.parametres.filter((p: any) => p?.nom)
@@ -1265,14 +1420,136 @@ export async function buildLaboratoryDocumentPdf(model: LaboratoryDocumentModel)
   } else if (!structured.length && !parametres.length) {
     kit.paragraph('Résultats non encore disponibles.', { italic: true, color: MUTED });
   }
+}
 
-  if (analyse.observations) {
-    kit.section('Interprétation & observations');
-    kit.paragraph(analyse.observations);
+const LAB_STATUT_LABELS: Record<string, string> = {
+  'demandé': 'Demandé', 'prélevé': 'Prélevé', 'en_cours': 'En analyse', 'terminé': 'Validé', 'annulé': 'Annulé',
+};
+
+function labHeader(kit: DocumentKit, demande: any, title: string, shortTitle: string) {
+  const patient = demande?.patients || {};
+  const prescripteur = demande?.personnel || {};
+  const hasPrescripteur = Boolean(prescripteur?.nom || prescripteur?.prenom);
+  kit.letterhead({
+    title,
+    meta: `Demande N° ${demande.numero || '—'}   •   du ${formatDate(demande.date_demande, 'long')} à ${formatTime(demande.date_demande)}`,
+    service: 'Laboratoire de biologie médicale',
+    right: {
+      heading: hasPrescripteur ? doctorName(prescripteur) : 'Prescripteur non renseigné',
+      sub: prescripteur?.specialite || 'Médecin prescripteur',
+      caption: "Demandeur de l'examen",
+    },
+    shortTitle,
+    reference: `${fullName(patient)}  •  N° ${demande.numero || ''}`,
+  });
+  kit.infoCard(patientCardRows(patient, [
+    { label: 'Priorité', value: demande.urgent ? 'URGENT' : 'Normale', w: 0.14 },
+  ]));
+}
+
+// =====================================================
+// 5 bis. Bon de demande d'examens
+// =====================================================
+
+export async function buildLabRequestOrderPdf(model: LabRequestDocumentModel) {
+  const { demande, analyses = [], printedBy, printedAt } = model;
+  const kit = await DocumentKit.create();
+  const examens = analyses.filter((a) => a.statut !== 'annulé');
+
+  labHeader(kit, demande, "BON DE DEMANDE D'EXAMENS", "Bon de demande d'examens");
+
+  kit.section(`Examens demandés (${examens.length})`);
+  kit.table(
+    [
+      { header: 'N°', width: 7, align: 'center' },
+      { header: 'Examen', width: 63 },
+      { header: 'Prélevé', width: 15, align: 'center' },
+      { header: 'Statut', width: 15 },
+    ],
+    examens.map((a, i) => [
+      String(i + 1),
+      a.type_analyse,
+      a.date_prelevement ? 'Oui' : '[   ]',
+      LAB_STATUT_LABELS[a.statut] || a.statut,
+    ]),
+    { emptyText: 'Aucun examen.' }
+  );
+
+  if (demande.renseignements) {
+    kit.section('Renseignements cliniques');
+    kit.paragraph(demande.renseignements);
   }
 
-  kit.signatures([{ title: 'Le biologiste / technicien', name: fullName(analyse?.technicien) || undefined }], {
-    leftNote: [`Validé le ${analyse.date_resultat ? formatDate(analyse.date_resultat, 'long') : '—'}`, `Réf. ${ref}`],
+  if (demande.urgent) {
+    kit.ensure(26);
+    kit.stamp('URGENT', DANGER, kit.pageWidth - kit.margin - 28, kit.y + 6);
+    kit.y += 22;
+  }
+
+  kit.signatures([
+    { title: 'Le médecin prescripteur', name: demande?.personnel ? doctorName(demande.personnel) : undefined },
+    { title: 'Le laboratoire (réception)', name: undefined },
+  ]);
+
+  return kit.finish({
+    notice: 'Bon à présenter au laboratoire et à la caisse  •  Les examens sont facturés séparément sur la facture du patient',
+    printedBy,
+    printedAt,
+  });
+}
+
+// =====================================================
+// 5 ter. Compte rendu groupé d'une demande d'examens
+// =====================================================
+
+export async function buildLabRequestReportPdf(model: LabRequestDocumentModel) {
+  const { demande, analyses = [], printedBy, printedAt } = model;
+  const kit = await DocumentKit.create();
+  const examens = analyses.filter((a) => a.statut !== 'annulé');
+  const valides = examens.filter((a) => a.statut === 'terminé');
+  const enAttente = examens.length - valides.length;
+
+  labHeader(kit, demande, "COMPTE RENDU D'ANALYSES", "Compte rendu d'analyses");
+
+  const prelevement = examens.map((a) => a.date_prelevement).filter(Boolean).sort()[0];
+  const dernierResultat = valides.map((a) => a.date_resultat).filter(Boolean).sort().reverse()[0];
+  kit.section('Demande');
+  kit.keyValues([
+    { label: 'Examens', value: `${valides.length} validé(s) sur ${examens.length}` },
+    { label: 'Prélèvement', value: prelevement ? formatDateTime(prelevement) : 'Non effectué' },
+    { label: 'Date de la demande', value: formatDateTime(demande.date_demande) },
+    { label: 'Dernière validation', value: dernierResultat ? formatDateTime(dernierResultat) : 'En attente' },
+  ]);
+
+  if (demande.renseignements) {
+    kit.section('Renseignements cliniques');
+    kit.paragraph(demande.renseignements);
+  }
+
+  if (enAttente > 0) {
+    kit.callout('Compte rendu partiel', `${enAttente} examen(s) encore en cours d'analyse : un compte rendu complet sera remis dès leur validation.`, WARNING);
+  }
+
+  examens.forEach((a) => {
+    // Garder chaque examen d'un seul tenant (titre, tableau, conclusion) si possible
+    const nbParams = Array.isArray(a.resultats?.parametres) ? a.resultats.parametres.length : 0;
+    const hauteur = 16 + (a.statut === 'terminé' ? (nbParams ? 12 + nbParams * 8.5 + 8 : 0) + (a.resultats?.texte ? 26 : 0) : 8);
+    if (hauteur < 150) kit.ensure(hauteur);
+    kit.section(`${a.type_analyse}${a.statut === 'terminé' ? '' : ` — ${(LAB_STATUT_LABELS[a.statut] || a.statut).toLowerCase()}`}`);
+    if (a.statut === 'terminé') {
+      renderLabResults(kit, a);
+      if (a.observations) kit.paragraph(`Observations : ${a.observations}`, { italic: true, color: MUTED, size: 8.8 });
+    } else {
+      kit.paragraph('Résultat en attente.', { italic: true, color: MUTED });
+    }
+  });
+
+  const techniciens = Array.from(new Set(valides.map((a) => fullName(a.technicien)).filter(Boolean)));
+  kit.signatures([{ title: 'Le biologiste / technicien', name: techniciens.join(', ') || undefined }], {
+    leftNote: [
+      dernierResultat ? `Validé le ${formatDate(dernierResultat, 'long')}` : 'Validation en attente',
+      `Demande N° ${demande.numero || '—'}`,
+    ],
   });
 
   return kit.finish({

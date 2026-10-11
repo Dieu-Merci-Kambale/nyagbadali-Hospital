@@ -11,7 +11,7 @@ import { formatDate } from '@/lib/format';
 const MODULE_LABELS: Record<string, string> = {
   dashboard: 'Tableau de bord', patients: 'Patients', 'rendez-vous': 'Rendez-vous', consultations: 'Consultations',
   hospitalisation: 'Hospitalisation', chambres: 'Chambres & lits', pharmacie: 'Pharmacie', laboratoire: 'Laboratoire',
-  personnel: 'Personnel', facturation: 'Facturation', departements: 'Départements', rapports: 'Rapports', audit: "Journal d'activité",
+  personnel: 'Personnel', facturation: 'Facturation', departements: 'Départements', rapports: 'Rapports', statistiques: 'Statistiques', audit: "Journal d'activité",
 };
 
 export default function ProfilPage() {

@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Search, Loader2, Edit, AlertTriangle, Save, Inbox, BookOpen } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Loader2, Edit, AlertTriangle, Save, Inbox, BookOpen, Lock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
+import { useAuth } from '@/contexts/AuthContext';
 import Modal from '@/components/ui/Modal';
 import { CATEGORIES_ACTES, formatMoney, explainDbError } from '@/lib/format';
 import type { ActeTarif } from '@/types';
@@ -17,6 +18,9 @@ const EMPTY: FormState = { code: '', libelle: '', categorie: 'consultation', pri
 export default function TarifsPage() {
   const router = useRouter();
   const { confirm } = useConfirm();
+  const { profile } = useAuth();
+  // Seuls les administrateurs gèrent le catalogue ; les autres le consultent
+  const canEdit = profile?.role === 'super_admin' || profile?.role === 'admin';
 
   const [actes, setActes] = useState<ActeTarif[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +49,7 @@ export default function TarifsPage() {
   }, [load]);
 
   const handleSave = async () => {
-    if (!form) return;
+    if (!form || !canEdit) return;
     if (!form.code.trim() || !form.libelle.trim()) {
       toast.error('Le code et le libellé sont obligatoires.');
       return;
@@ -72,6 +76,7 @@ export default function TarifsPage() {
   };
 
   const toggleActif = async (acte: ActeTarif) => {
+    if (!canEdit) return;
     if (acte.actif) {
       const ok = await confirm({
         title: 'Désactiver cet acte',
@@ -108,10 +113,18 @@ export default function TarifsPage() {
             <p className="page-subtitle">Prix de référence utilisés pour composer les factures</p>
           </div>
         </div>
-        <button className="btn btn-primary" onClick={() => setForm({ ...EMPTY })} disabled={!!dbError}>
-          <Plus size={16} /> Nouvel acte
-        </button>
+        {canEdit && (
+          <button className="btn btn-primary" onClick={() => setForm({ ...EMPTY })} disabled={!!dbError}>
+            <Plus size={16} /> Nouvel acte
+          </button>
+        )}
       </div>
+
+      {!canEdit && (
+        <div className="alert alert-info" style={{ marginBottom: 20 }}>
+          <Lock size={18} /> Consultation seule : l&apos;ajout et la modification des tarifs sont réservés à l&apos;administration (super administrateur et administrateur).
+        </div>
+      )}
 
       {dbError && (
         <div className="alert alert-danger" style={{ marginBottom: 20 }}>
@@ -154,7 +167,7 @@ export default function TarifsPage() {
                 <th>Catégorie</th>
                 <th style={{ textAlign: 'right' }}>Tarif</th>
                 <th>Statut</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
+                {canEdit && <th style={{ textAlign: 'right' }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -165,15 +178,21 @@ export default function TarifsPage() {
                   <td><span className="badge badge-info">{CATEGORIES_ACTES[a.categorie] || a.categorie}</span></td>
                   <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatMoney(a.prix)}</td>
                   <td>
-                    <button className={`badge ${a.actif ? 'badge-success' : 'badge-neutral'}`} style={{ border: 'none', cursor: 'pointer' }} onClick={() => toggleActif(a)} title="Activer / désactiver">
-                      {a.actif ? 'Actif' : 'Désactivé'}
-                    </button>
+                    {canEdit ? (
+                      <button className={`badge ${a.actif ? 'badge-success' : 'badge-neutral'}`} style={{ border: 'none', cursor: 'pointer' }} onClick={() => toggleActif(a)} title="Activer / désactiver">
+                        {a.actif ? 'Actif' : 'Désactivé'}
+                      </button>
+                    ) : (
+                      <span className={`badge ${a.actif ? 'badge-success' : 'badge-neutral'}`}>{a.actif ? 'Actif' : 'Désactivé'}</span>
+                    )}
                   </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setForm({ id: a.id, code: a.code, libelle: a.libelle, categorie: a.categorie, prix: Number(a.prix), actif: a.actif })}>
-                      <Edit size={14} /> Modifier
-                    </button>
-                  </td>
+                  {canEdit && (
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setForm({ id: a.id, code: a.code, libelle: a.libelle, categorie: a.categorie, prix: Number(a.prix), actif: a.actif })}>
+                        <Edit size={14} /> Modifier
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -182,7 +201,7 @@ export default function TarifsPage() {
       )}
 
       <Modal
-        open={!!form}
+        open={!!form && canEdit}
         title={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><BookOpen size={18} /> {form?.id ? 'Modifier un acte' : 'Nouvel acte'}</span>}
         onClose={() => setForm(null)}
         footer={(

@@ -48,7 +48,7 @@ export default function DashboardPage() {
 
   const can = (m: Parameters<typeof hasAccess>[1]) => (profile ? hasAccess(profile.role, m) : false);
   const isMedecin = profile?.role === 'medecin' || profile?.role === 'medecin_chef';
-  const seesMoney = can('facturation') || can('rapports');
+  const seesMoney = can('facturation') || can('statistiques');
 
   useEffect(() => {
     if (!profile) return;
@@ -162,7 +162,7 @@ export default function DashboardPage() {
     { label: "RDV aujourd'hui", value: stats.rdvAujourdhui, icon: <CalendarDays size={22} />, color: 'green', sub: `${stats.consultationsJour} consultation(s) réalisée(s)`, href: can('rendez-vous') ? '/rendez-vous' : undefined },
     { label: 'Lits occupés', value: `${stats.litsOccupes}/${stats.litsTotal}`, icon: <BedDouble size={22} />, color: 'orange', sub: stats.litsTotal > 0 ? `${Math.round((stats.litsOccupes / stats.litsTotal) * 100)}% d'occupation` : 'Aucun lit configuré', href: can('hospitalisation') ? '/hospitalisation' : undefined },
     seesMoney
-      ? { label: 'Encaissements du mois', value: formatMoney(stats.revenuMensuel), icon: <TrendingUp size={22} />, color: 'purple', sub: 'ce mois', href: can('rapports') ? '/rapports' : '/facturation' }
+      ? { label: 'Encaissements du mois', value: formatMoney(stats.revenuMensuel), icon: <TrendingUp size={22} />, color: 'purple', sub: 'ce mois', href: can('statistiques') ? '/statistiques' : '/facturation' }
       : { label: 'Consultations du jour', value: stats.consultationsJour, icon: <Stethoscope size={22} />, color: 'purple', sub: "aujourd'hui", href: can('consultations') ? '/consultations' : undefined },
   ];
 

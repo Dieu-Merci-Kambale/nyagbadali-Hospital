@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Loader2,
   Inbox,
-  ArrowRight
+  ArrowRight,
+  FileSpreadsheet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -97,6 +98,9 @@ export default function HospitalisationPage() {
           <p className="page-subtitle">Gestion des admissions et suivi des lits</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
+          <Link href="/hospitalisation/rapports" className="btn btn-outline">
+            <FileSpreadsheet size={16} /> Rapports
+          </Link>
           <Link href="/hospitalisation/lits" className="btn btn-outline">
             <BedDouble size={16} /> Gestion des Lits
           </Link>

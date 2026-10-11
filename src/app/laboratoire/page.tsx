@@ -13,61 +13,85 @@ import {
   RefreshCw,
   AlertTriangle,
   Eye,
+  Siren,
+  FileSpreadsheet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { LAB_STATUTS, statusBadge, formatDate, formatTime, explainDbError } from '@/lib/format';
+import { statutDemande } from '@/lib/lab-catalogue';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 
 const TABS = [
   { key: 'actifs', label: 'À traiter' },
-  { key: 'demandé', label: 'Demandés' },
-  { key: 'prélevé', label: 'Prélevés' },
+  { key: 'demandé', label: 'À prélever' },
+  { key: 'prélevé', label: 'Prélevées' },
   { key: 'en_cours', label: 'En analyse' },
-  { key: 'terminé', label: 'Résultats' },
-  { key: 'tous', label: 'Tous' },
+  { key: 'terminé', label: 'Terminées' },
+  { key: 'tous', label: 'Toutes' },
 ];
 
+const DOT: Record<string, string> = {
+  'demandé': 'var(--neutral-400)',
+  'prélevé': 'var(--primary-500)',
+  'en_cours': 'var(--warning)',
+  'terminé': 'var(--success)',
+  'annulé': 'var(--danger)',
+};
+
 export default function LaboratoirePage() {
-  const [analyses, setAnalyses] = useState<any[]>([]);
+  const [demandes, setDemandes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState('');
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('actifs');
 
-  const fetchAnalyses = useCallback(async () => {
-    setLoading(true);
+  const fetchDemandes = useCallback(async (silencieux = false) => {
+    if (!silencieux) setLoading(true);
     const { data, error } = await supabase
-      .from('analyses_laboratoire')
-      .select('*, patients(nom, prenom, code_patient), personnel!analyses_laboratoire_medecin_prescripteur_id_fkey(nom, prenom)')
+      .from('demandes_laboratoire')
+      .select(`
+        *,
+        patients(nom, prenom, code_patient),
+        personnel!demandes_laboratoire_medecin_prescripteur_id_fkey(nom, prenom),
+        analyses_laboratoire(id, type_analyse, statut, urgent, resultats)
+      `)
       .order('date_demande', { ascending: false });
 
     if (error) {
       console.error('Erreur:', error);
       setDbError(explainDbError(error));
-      toast.error('Impossible de charger les analyses.');
+      if (!silencieux) toast.error('Impossible de charger le laboratoire.');
     } else {
       setDbError('');
-      setAnalyses(data || []);
+      setDemandes((data || []).map((d: any) => ({ ...d, statut: statutDemande(d.analyses_laboratoire || []) })));
     }
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchAnalyses();
-  }, [fetchAnalyses]);
+    fetchDemandes();
+  }, [fetchDemandes]);
 
-  const count = (statut: string) => analyses.filter((a) => a.statut === statut).length;
+  // Nouvelles demandes et résultats saisis sur d'autres postes
+  useLiveRefresh(() => fetchDemandes(true), ['demandes_laboratoire', 'analyses_laboratoire']);
 
-  const filtered = analyses.filter((a) => {
+  const examens = demandes.flatMap((d) => d.analyses_laboratoire || []);
+  const countExamens = (statut: string) => examens.filter((a: any) => a.statut === statut).length;
+  const estActive = (d: any) => ['demandé', 'prélevé', 'en_cours'].includes(d.statut);
+  const countDemandes = (key: string) => key === 'tous' ? demandes.length
+    : key === 'actifs' ? demandes.filter(estActive).length
+      : demandes.filter((d) => d.statut === key).length;
+
+  const filtered = demandes.filter((d) => {
     const q = search.toLowerCase();
     const matchSearch = q === '' ||
-      `${a.patients?.prenom || ''} ${a.patients?.nom || ''}`.toLowerCase().includes(q) ||
-      (a.patients?.code_patient || '').toLowerCase().includes(q) ||
-      (a.type_analyse || '').toLowerCase().includes(q);
-    const matchTab =
-      tab === 'tous' ||
-      (tab === 'actifs' ? ['demandé', 'prélevé', 'en_cours'].includes(a.statut) : a.statut === tab);
+      `${d.patients?.prenom || ''} ${d.patients?.nom || ''}`.toLowerCase().includes(q) ||
+      (d.patients?.code_patient || '').toLowerCase().includes(q) ||
+      (d.numero || '').toLowerCase().includes(q) ||
+      (d.analyses_laboratoire || []).some((a: any) => (a.type_analyse || '').toLowerCase().includes(q));
+    const matchTab = tab === 'tous' || (tab === 'actifs' ? estActive(d) : d.statut === tab);
     return matchSearch && matchTab;
   });
 
@@ -86,10 +110,10 @@ export default function LaboratoirePage() {
   }
 
   const stats = [
-    { label: 'Demandés', count: count('demandé'), color: 'blue', icon: <Clock size={22} /> },
-    { label: 'Prélevés', count: count('prélevé'), color: 'purple', icon: <FlaskConical size={22} /> },
-    { label: 'En analyse', count: count('en_cours'), color: 'orange', icon: <Microscope size={22} /> },
-    { label: 'Résultats disponibles', count: count('terminé'), color: 'green', icon: <CheckCircle size={22} /> },
+    { label: 'Examens à prélever', count: countExamens('demandé'), color: 'blue', icon: <Clock size={22} /> },
+    { label: 'Prélevés', count: countExamens('prélevé'), color: 'purple', icon: <FlaskConical size={22} /> },
+    { label: 'En analyse', count: countExamens('en_cours'), color: 'orange', icon: <Microscope size={22} /> },
+    { label: 'Résultats validés', count: countExamens('terminé'), color: 'green', icon: <CheckCircle size={22} /> },
   ];
 
   return (
@@ -100,9 +124,12 @@ export default function LaboratoirePage() {
           <p className="page-subtitle">Demandes d&apos;examens, prélèvements et résultats</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={fetchAnalyses} className="btn btn-outline" title="Actualiser">
+          <button onClick={() => fetchDemandes()} className="btn btn-outline" title="Actualiser">
             <RefreshCw size={16} /> Actualiser
           </button>
+          <Link href="/laboratoire/rapports" className="btn btn-outline">
+            <FileSpreadsheet size={16} /> Rapports
+          </Link>
           <Link href="/laboratoire/nouveau" className="btn btn-primary">
             <Plus size={16} /> Nouvelle demande
           </Link>
@@ -133,7 +160,7 @@ export default function LaboratoirePage() {
             <Search className="header-search-icon" />
             <input
               type="text"
-              placeholder="Rechercher par patient, code patient ou type d'examen..."
+              placeholder="Rechercher par patient, code patient, n° de demande ou examen..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -142,16 +169,11 @@ export default function LaboratoirePage() {
       </div>
 
       <div className="tabs">
-        {TABS.map((t) => {
-          const n = t.key === 'tous' ? analyses.length
-            : t.key === 'actifs' ? analyses.filter((a) => ['demandé', 'prélevé', 'en_cours'].includes(a.statut)).length
-            : count(t.key);
-          return (
-            <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-              {t.label} ({n})
-            </button>
-          );
-        })}
+        {TABS.map((t) => (
+          <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+            {t.label} ({countDemandes(t.key)})
+          </button>
+        ))}
       </div>
 
       {sorted.length === 0 ? (
@@ -159,8 +181,8 @@ export default function LaboratoirePage() {
           <div className="card-body">
             <div className="empty-state">
               <Inbox className="empty-state-icon" />
-              <h3>Aucune analyse</h3>
-              <p>Aucune demande d&apos;analyse ne correspond à cette sélection.</p>
+              <h3>Aucune demande</h3>
+              <p>Aucune demande d&apos;examens ne correspond à cette sélection.</p>
             </div>
           </div>
         </div>
@@ -171,36 +193,62 @@ export default function LaboratoirePage() {
               <tr>
                 <th>Demande</th>
                 <th>Patient</th>
-                <th>Examen</th>
+                <th>Examens</th>
                 <th>Prescripteur</th>
-                <th>Statut</th>
-                <th>Actions</th>
+                <th>Avancement</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map((analyse) => {
-                const st = statusBadge(LAB_STATUTS, analyse.statut);
+              {sorted.map((d) => {
+                const st = statusBadge(LAB_STATUTS, d.statut);
+                const ex = (d.analyses_laboratoire || []) as any[];
+                const actifs = ex.filter((a) => a.statut !== 'annulé');
+                const valides = actifs.filter((a) => a.statut === 'terminé').length;
+                const anomalies = ex.reduce((n, a) => n + ((a.resultats?.parametres || []).filter((p: any) => p.anormal).length), 0);
                 return (
-                  <tr key={analyse.id}>
+                  <tr key={d.id}>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{formatDate(analyse.date_demande)}</div>
-                      <div style={{ fontSize: 11, color: 'var(--neutral-500)' }}>{formatTime(analyse.date_demande)}</div>
+                      <div style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 12 }}>{d.numero}</div>
+                      <div style={{ fontSize: 11, color: 'var(--neutral-500)' }}>{formatDate(d.date_demande)} à {formatTime(d.date_demande)}</div>
+                      {d.urgent && <span className="badge badge-danger" style={{ marginTop: 4 }}><Siren size={11} /> Urgent</span>}
                     </td>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{analyse.patients?.prenom} {analyse.patients?.nom}</div>
-                      <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>{analyse.patients?.code_patient}</div>
+                      <div style={{ fontWeight: 600 }}>{d.patients?.prenom} {d.patients?.nom}</div>
+                      <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>{d.patients?.code_patient}</div>
                     </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {analyse.type_analyse}
-                        {analyse.urgent && <span className="badge badge-danger">Urgent</span>}
+                    <td style={{ maxWidth: 320 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {ex.map((a) => (
+                          <span
+                            key={a.id}
+                            title={statusBadge(LAB_STATUTS, a.statut).label}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '3px 8px', borderRadius: 999,
+                              background: 'var(--neutral-50)', border: '1px solid var(--neutral-200)',
+                              textDecoration: a.statut === 'annulé' ? 'line-through' : 'none', color: 'var(--neutral-700)',
+                            }}
+                          >
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: DOT[a.statut] || 'var(--neutral-400)' }} />
+                            {a.type_analyse}
+                          </span>
+                        ))}
                       </div>
                     </td>
-                    <td>{analyse.personnel ? `Dr. ${analyse.personnel.prenom} ${analyse.personnel.nom}` : '—'}</td>
-                    <td><span className={`badge ${st.badge}`}>{st.label}</span></td>
+                    <td>{d.personnel ? `Dr. ${d.personnel.prenom} ${d.personnel.nom}` : '—'}</td>
+                    <td style={{ minWidth: 150 }}>
+                      <span className={`badge ${st.badge}`}>{st.label}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                        <div className="bar-track" style={{ flex: 1 }}>
+                          <div className="bar-fill" style={{ width: `${actifs.length ? (valides / actifs.length) * 100 : 0}%`, background: 'var(--success)' }} />
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--neutral-500)', whiteSpace: 'nowrap' }}>{valides}/{actifs.length}</span>
+                      </div>
+                      {anomalies > 0 && <div style={{ fontSize: 11, color: 'var(--danger-600)', fontWeight: 600, marginTop: 4 }}>{anomalies} valeur(s) anormale(s)</div>}
+                    </td>
                     <td>
-                      <Link href={`/laboratoire/${analyse.id}`} className="btn btn-outline btn-sm">
-                        <Eye size={14} /> {analyse.statut === 'terminé' || analyse.statut === 'annulé' ? 'Consulter' : 'Traiter'}
+                      <Link href={`/laboratoire/demande/${d.id}`} className="btn btn-outline btn-sm">
+                        <Eye size={14} /> {estActive(d) ? 'Traiter' : 'Consulter'}
                       </Link>
                     </td>
                   </tr>

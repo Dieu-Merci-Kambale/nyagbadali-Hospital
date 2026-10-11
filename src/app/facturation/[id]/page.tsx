@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast';
 import { useConfirm } from '@/context/ConfirmContext';
 import { buildPaymentReceiptPdf } from '@/lib/document-models';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { roleLabels } from '@/lib/role-permissions';
 
 function formatMoneySafe(value: number | string): string {
@@ -37,7 +38,10 @@ export default function FactureDetailsPage() {
     fetchData();
   }, [id]);
 
-  async function fetchData() {
+  // Mise à jour automatique quand un autre poste encaisse ou modifie la facture
+  useLiveRefresh(() => { if (!saving) fetchData(true); }, ["paiements", "factures", "lignes_facture"]);
+
+  async function fetchData(silencieux = false) {
     if (!id) return;
     const { data, error } = await supabase
       .from('factures')
@@ -53,8 +57,16 @@ export default function FactureDetailsPage() {
     if (!error && data) {
       // Calcul du total payé
       const totalPaye = data.paiements?.reduce((sum: number, p: any) => sum + Number(p.montant || 0), 0) || 0;
-      setFacture({ ...data, totalPaye });
-      setMontantPaiement((data.montant_patient - totalPaye).toString());
+      const reste = Math.max(0, data.montant_patient - totalPaye);
+      setFacture((prev: any) => {
+        // Un paiement fait ailleurs : on prévient le caissier
+        if (silencieux && prev && (prev.paiements?.length || 0) < (data.paiements?.length || 0)) {
+          toast("Un paiement vient d'être enregistré sur cette facture depuis un autre poste.", { icon: "🔄" });
+        }
+        return { ...data, totalPaye };
+      });
+      // Le montant saisi n'est remplacé que s'il dépasse le nouveau reste à payer
+      setMontantPaiement((prev) => (!silencieux || prev === "" || Number(prev) > reste ? reste.toString() : prev));
     }
     setLoading(false);
   }

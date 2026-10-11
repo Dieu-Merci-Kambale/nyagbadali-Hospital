@@ -21,10 +21,12 @@ import {
   History,
   PackagePlus,
   Download,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import Modal from '@/components/ui/Modal';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { MOUVEMENT_TYPES, statusBadge, formatDateTime, formatMoney, downloadCsv, explainDbError } from '@/lib/format';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -84,8 +86,8 @@ export default function PharmacieHubPage() {
     });
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silencieux = false) => {
+    if (!silencieux) setLoading(true);
     
     // Fetch meds
     const { data: medsData } = await supabase
@@ -116,6 +118,9 @@ export default function PharmacieHubPage() {
 
     setLoading(false);
   };
+
+  // Ordonnances et stocks modifiés par d'autres postes (pas pendant une saisie de stock)
+  useLiveRefresh(() => { if (!stockForm && !dispensing) loadData(true); }, ['prescriptions', 'medicaments', 'mouvements_stock']);
 
   useEffect(() => {
     loadData();
@@ -170,7 +175,7 @@ export default function PharmacieHubPage() {
 
     toast.success(`${qty} unité(s) de ${med.nom_commercial} délivrée(s).`);
     // Refresh
-    await loadData();
+    await loadData(true);
     setDispensing(null);
   };
 
@@ -257,11 +262,16 @@ export default function PharmacieHubPage() {
           <h1 className="page-title">Pharmacie Centrale</h1>
           <p className="page-subtitle">Gestion intégrée des stocks et délivrance</p>
         </div>
-        {activeTab === 'inventaire' && (
-          <Link href="/pharmacie/nouveau" className="btn btn-primary">
-            <Plus size={16} /> Ajouter un Médicament
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link href="/pharmacie/rapports" className="btn btn-outline">
+            <FileSpreadsheet size={16} /> Rapports
           </Link>
-        )}
+          {activeTab === 'inventaire' && (
+            <Link href="/pharmacie/nouveau" className="btn btn-primary">
+              <Plus size={16} /> Ajouter un Médicament
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}

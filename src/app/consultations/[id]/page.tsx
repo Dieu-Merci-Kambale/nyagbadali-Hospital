@@ -15,6 +15,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { roleLabels, hasAccess } from '@/lib/role-permissions';
 import { buildConsultationDocumentPdf, buildPrescriptionDocumentPdf } from '@/lib/document-models';
 import MedicalAlerts from '@/components/patients/MedicalAlerts';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { LAB_STATUTS, statusBadge, toDateKey, formatDateTime } from '@/lib/format';
 
 const sectionTitle: React.CSSProperties = { fontSize: 12, textTransform: 'uppercase', color: 'var(--neutral-400)', fontWeight: 600, marginBottom: 8 };
@@ -71,6 +72,9 @@ export default function ConsultationDetailsPage() {
   useEffect(() => {
     fetchDetails();
   }, [fetchDetails]);
+
+  // Délivrances de la pharmacie et résultats du laboratoire visibles sans recharger
+  useLiveRefresh(fetchDetails, ['prescriptions', 'analyses_laboratoire'], { filter: id ? `consultation_id=eq.${id}` : undefined });
 
   if (loading) {
     return (

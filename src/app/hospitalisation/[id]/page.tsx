@@ -15,6 +15,7 @@ import { roleLabels, hasAccess } from '@/lib/role-permissions';
 import { buildAdmissionDocumentPdf } from '@/lib/document-models';
 import Modal from '@/components/ui/Modal';
 import MedicalAlerts from '@/components/patients/MedicalAlerts';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { HOSP_STATUTS, SUIVI_TYPES, statusBadge, formatDate, formatTime, formatDateTime, getAge, daysBetween, explainDbError } from '@/lib/format';
 
 const CONSTANTES_SUIVI = [
@@ -79,6 +80,9 @@ export default function HospitalisationDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Suivi infirmier et médical saisi sur d'autres postes
+  useLiveRefresh(() => { if (!saving) load(); }, ['suivis_hospitalisation', 'hospitalisations']);
 
   const handleAddSuivi = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

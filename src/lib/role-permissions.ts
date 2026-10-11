@@ -16,6 +16,7 @@ export type AppModule =
   | 'facturation'
   | 'departements'
   | 'rapports'
+  | 'statistiques'
   | 'audit'
   | 'profil';
 
@@ -33,6 +34,7 @@ export const moduleRoutes: Record<AppModule, string> = {
   'facturation': '/facturation',
   'departements': '/departements',
   'rapports': '/rapports',
+  'statistiques': '/statistiques',
   'audit': '/audit',
   'profil': '/profil',
 };
@@ -48,15 +50,15 @@ const rolePermissions: Record<RolePersonnel, AppModule[]> = {
   super_admin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
     'chambres', 'pharmacie', 'laboratoire', 'personnel', 'facturation',
-    'departements', 'rapports', 'audit', 'profil',
+    'departements', 'rapports', 'statistiques', 'audit', 'profil',
   ],
   admin: [
     'dashboard', 'patients', 'rendez-vous', 'pharmacie', 'chambres',
-    'personnel', 'facturation', 'departements', 'rapports', 'audit', 'profil',
+    'personnel', 'facturation', 'departements', 'rapports', 'statistiques', 'audit', 'profil',
   ],
   medecin_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'pharmacie', 'laboratoire', 'rapports', 'profil',
+    'chambres', 'pharmacie', 'laboratoire', 'rapports', 'statistiques', 'profil',
   ],
   medecin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',

@@ -107,6 +107,16 @@ export const LAB_CATALOGUE: ExamenCatalogue[] = [
   },
 ];
 
+/** Statut global d'une demande à partir de ses examens. */
+export function statutDemande(analyses: { statut: string }[]): string {
+  const actifs = analyses.filter((a) => a.statut !== 'annulé');
+  if (actifs.length === 0) return 'annulé';
+  if (actifs.every((a) => a.statut === 'terminé')) return 'terminé';
+  if (actifs.some((a) => a.statut === 'en_cours' || a.statut === 'terminé')) return 'en_cours';
+  if (actifs.every((a) => a.statut === 'demandé')) return 'demandé';
+  return 'prélevé';
+}
+
 export function findExamen(typeAnalyse?: string | null): ExamenCatalogue | undefined {
   if (!typeAnalyse) return undefined;
   const t = typeAnalyse.toLowerCase();

@@ -16,7 +16,7 @@ type PatientDu = {
 };
 
 /** Patients dont des prestations (consultations, médicaments, examens, séjours) ne sont pas encore facturées. */
-export default function PendingBillingCard() {
+export default function PendingBillingCard({ reloadKey = 0 }: { reloadKey?: number }) {
   const [patients, setPatients] = useState<PatientDu[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -41,7 +41,7 @@ export default function PendingBillingCard() {
       setPatients(Array.from(map.values()).sort((a, b) => new Date(a.depuis).getTime() - new Date(b.depuis).getTime()));
       setLoading(false);
     });
-  }, []);
+  }, [reloadKey]);
 
   const total = patients.reduce((s, p) => s + p.total, 0);
 

@@ -15,6 +15,7 @@ import {
   Search,
   Thermometer,
   HeartPulse,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -93,9 +94,14 @@ export default function ConsultationsPage() {
           <h1 className="page-title">Consultations</h1>
           <p className="page-subtitle">Dossiers médicaux et consultations</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => router.push('/consultations/nouvelle')}>
-          <Plus size={16} /> Nouvelle consultation
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link href="/consultations/rapports" className="btn btn-outline">
+            <FileSpreadsheet size={16} /> Rapports
+          </Link>
+          <button type="button" className="btn btn-primary" onClick={() => router.push('/consultations/nouvelle')}>
+            <Plus size={16} /> Nouvelle consultation
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>

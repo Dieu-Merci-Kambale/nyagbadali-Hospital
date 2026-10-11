@@ -16,6 +16,7 @@ import {
   Inbox,
   Filter,
   BookOpen,
+  FileSpreadsheet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
@@ -24,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { roleLabels } from '@/lib/role-permissions';
 import { downloadInvoicePdf } from '@/lib/invoice';
 import PendingBillingCard from '@/components/facturation/PendingBillingCard';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { formatMoney } from '@/lib/format';
 
 const formatCDF = formatMoney;
@@ -47,9 +49,13 @@ export default function FacturationPage() {
   const [appliedStartDate, setAppliedStartDate] = useState('');
   const [appliedEndDate, setAppliedEndDate] = useState('');
 
+  const [reloadKey, setReloadKey] = useState(0);
+  // Mise à jour automatique (paiements et factures saisis sur d'autres postes)
+  useLiveRefresh(() => setReloadKey((k) => k + 1), ['factures', 'paiements']);
+
   useEffect(() => {
     async function fetchFactures() {
-      setLoading(true);
+      if (reloadKey === 0) setLoading(true);
       const { data, error } = await supabase
         .from('factures')
         .select('*, patients(nom, prenom, code_patient), paiements(montant)')
@@ -67,7 +73,7 @@ export default function FacturationPage() {
       setLoading(false);
     }
     fetchFactures();
-  }, []);
+  }, [reloadKey]);
 
   const filtered = factures.filter((f) => {
     const matchSearch = search === '' ||
@@ -133,6 +139,9 @@ export default function FacturationPage() {
           <p className="page-subtitle">Gestion des paiements et factures</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
+          <Link href="/facturation/rapports" className="btn btn-outline">
+            <FileSpreadsheet size={16} /> Rapports
+          </Link>
           <Link href="/facturation/tarifs" className="btn btn-outline">
             <BookOpen size={16} /> Tarifs des actes
           </Link>
@@ -167,7 +176,7 @@ export default function FacturationPage() {
         </div>
       </div>
 
-      <PendingBillingCard />
+      <PendingBillingCard reloadKey={reloadKey} />
 
       {/* Filters */}
       <div className="card" style={{ marginBottom: 20 }}>

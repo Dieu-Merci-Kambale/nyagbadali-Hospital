@@ -11,6 +11,7 @@ import {
   Calendar,
   Loader2,
   Inbox,
+  FileSpreadsheet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -97,9 +98,14 @@ export default function PersonnelPage() {
           <h1 className="page-title">Personnel</h1>
           <p className="page-subtitle">{personnel.length} membres du personnel</p>
         </div>
-        <Link href="/personnel/nouveau" className="btn btn-primary">
-          <Plus size={16} /> Ajouter un Membre
-        </Link>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link href="/personnel/rapports" className="btn btn-outline">
+            <FileSpreadsheet size={16} /> Rapports
+          </Link>
+          <Link href="/personnel/nouveau" className="btn btn-primary">
+            <Plus size={16} /> Ajouter un Membre
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

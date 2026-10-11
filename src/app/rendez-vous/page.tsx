@@ -21,6 +21,7 @@ import {
   ChevronRight,
   List,
   Edit,
+  FileSpreadsheet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
@@ -30,6 +31,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { hasAccess, roleLabels } from '@/lib/role-permissions';
 import { buildAppointmentDocumentPdf } from '@/lib/document-models';
 import { nextQueueNumber } from '@/lib/rdv';
+import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { RDV_STATUTS, RDV_TYPES, statusBadge, formatDate, formatTime, toDateKey, explainDbError } from '@/lib/format';
 
 export default function RendezVousPage() {
@@ -56,8 +58,8 @@ export default function RendezVousPage() {
 
   const canConsult = profile ? hasAccess(profile.role, 'consultations') : false;
 
-  const fetchRDV = useCallback(async () => {
-    setLoading(true);
+  const fetchRDV = useCallback(async (silencieux = false) => {
+    if (!silencieux) setLoading(true);
     const { data, error } = await supabase
       .from('rendez_vous')
       .select('*, patients(id, nom, prenom, code_patient, date_naissance, sexe, telephone), personnel(id, nom, prenom, specialite)')
@@ -71,6 +73,9 @@ export default function RendezVousPage() {
     }
     setLoading(false);
   }, []);
+
+  // Agenda partagé : arrivées, annulations et consultations des autres postes
+  useLiveRefresh(() => fetchRDV(true), ['rendez_vous']);
 
   useEffect(() => {
     fetchRDV();
@@ -237,9 +242,12 @@ export default function RendezVousPage() {
               <List size={14} /> Liste
             </button>
           </div>
-          <button onClick={fetchRDV} className="btn btn-outline" title="Actualiser la liste">
+          <button onClick={() => fetchRDV()} className="btn btn-outline" title="Actualiser la liste">
             <RefreshCw size={16} /> Actualiser
           </button>
+          <Link href="/rendez-vous/rapports" className="btn btn-outline">
+            <FileSpreadsheet size={16} /> Rapports
+          </Link>
           <Link href="/rendez-vous/nouveau" className="btn btn-primary">
             <Plus size={16} /> Nouveau rendez-vous
           </Link>

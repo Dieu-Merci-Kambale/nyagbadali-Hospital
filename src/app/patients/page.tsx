@@ -15,7 +15,8 @@ import {
   ChevronRight,
   Shield,
   Loader2,
-  Inbox
+  Inbox,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Patient } from '@/types';
@@ -108,6 +109,9 @@ export default function PatientsPage() {
           <button className="btn btn-outline" onClick={handleExport} disabled={loading || filtered.length === 0} title="Exporter la liste filtrée (CSV / Excel)">
             <Download size={16} /> Exporter
           </button>
+          <Link href="/patients/rapports" className="btn btn-outline">
+            <FileSpreadsheet size={16} /> Rapports
+          </Link>
           <Link href="/patients/nouveau" className="btn btn-primary">
             <UserPlus size={16} /> Nouveau Patient
           </Link>

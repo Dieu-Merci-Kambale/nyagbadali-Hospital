@@ -66,17 +66,15 @@ function NouvelleAnalyseForm() {
     const prescripteurSelf = formData.get('prescripteur') === 'self';
     const description = (formData.get('description') as string) || null;
 
-    const rows = examens.map((type_analyse) => ({
-      patient_id: selectedPatientId,
-      medecin_prescripteur_id: prescripteurSelf ? profile.id : null,
-      consultation_id: consultationIdParam || null,
-      type_analyse,
-      description,
-      urgent,
-      statut: 'demandé',
-    }));
-
-    const { error } = await supabase.from('analyses_laboratoire').insert(rows);
+    // Une seule demande (bon) regroupant tous les examens, créée en une transaction
+    const { data: demandeId, error } = await supabase.rpc('creer_demande_laboratoire', {
+      p_patient_id: selectedPatientId,
+      p_examens: examens,
+      p_consultation_id: consultationIdParam || null,
+      p_renseignements: description,
+      p_urgent: urgent,
+      p_prescripteur_moi: prescripteurSelf,
+    });
     if (error) {
       console.error(error);
       setErrorMsg(explainDbError(error));
@@ -84,8 +82,8 @@ function NouvelleAnalyseForm() {
       return;
     }
 
-    toast.success('Demande transmise au laboratoire.');
-    router.push(consultationIdParam ? `/consultations/${consultationIdParam}` : '/laboratoire');
+    toast.success(`Demande de ${examens.length} examen${examens.length > 1 ? 's' : ''} transmise au laboratoire.`);
+    router.push(`/laboratoire/demande/${demandeId}`);
   };
 
   return (
