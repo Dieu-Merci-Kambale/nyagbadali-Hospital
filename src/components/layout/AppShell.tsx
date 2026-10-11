@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
@@ -11,6 +11,35 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Tablettes et téléphones : la navigation s'ouvre en tiroir par-dessus le contenu
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1024px)');
+    const sync = () => setCompact(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  // Fermer le tiroir après chaque navigation
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  // Bloquer le défilement de la page et fermer avec Échap quand le tiroir est ouvert
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileNavOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [mobileNavOpen]);
 
   const isLoginPage = pathname === '/login';
 
@@ -60,11 +89,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-layout">
       <Sidebar
-        collapsed={sidebarCollapsed}
+        collapsed={sidebarCollapsed && !compact}
         onToggle={() => setSidebarCollapsed((value) => !value)}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
       />
-      <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        <Header />
+      <div
+        className={`sidebar-backdrop ${mobileNavOpen ? 'visible' : ''}`}
+        onClick={() => setMobileNavOpen(false)}
+        aria-hidden="true"
+      />
+      <div className={`main-content ${sidebarCollapsed && !compact ? 'sidebar-collapsed' : ''}`}>
+        <Header onOpenMenu={() => setMobileNavOpen(true)} />
         <main className="page-content">
           <div className="page-surface">
             {children}

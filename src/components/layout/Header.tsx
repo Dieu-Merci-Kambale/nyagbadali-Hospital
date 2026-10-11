@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { Settings, Calendar } from 'lucide-react';
+import { Settings, Calendar, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { roleLabels } from '@/lib/role-permissions';
 import GlobalSearch from './GlobalSearch';
 import NotificationsBell from './NotificationsBell';
 
-export default function Header() {
+export default function Header({ onOpenMenu }: { onOpenMenu?: () => void }) {
   const { profile } = useAuth();
   const today = new Date();
   const dateStr = today.toLocaleDateString('fr-FR', {
@@ -19,6 +19,11 @@ export default function Header() {
 
   return (
     <header className="header">
+      {/* Bouton menu (tablettes et téléphones) */}
+      <button type="button" className="header-btn mobile-menu-btn" onClick={onOpenMenu} aria-label="Ouvrir le menu" title="Menu">
+        <Menu size={22} />
+      </button>
+
       {/* Recherche globale */}
       <GlobalSearch />
 
@@ -37,7 +42,7 @@ export default function Header() {
 
         {/* Utilisateur */}
         {profile && (
-          <Link href="/profil" style={{
+          <Link href="/profil" className="header-user" style={{
             display: 'flex',
             alignItems: 'center',
             gap: 10,
@@ -60,7 +65,7 @@ export default function Header() {
             }}>
               {profile.prenom[0]}{profile.nom[0]}
             </div>
-            <div style={{ lineHeight: 1.3 }}>
+            <div className="header-user-text" style={{ lineHeight: 1.3 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--neutral-800)' }}>
                 {profile.role.startsWith('medecin') ? 'Dr. ' : ''}{profile.prenom} {profile.nom}
               </div>

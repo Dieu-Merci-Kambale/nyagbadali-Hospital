@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 type Props = {
@@ -21,9 +22,10 @@ export default function Modal({ open, title, onClose, children, footer, maxWidth
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
+  // Rendu dans <body> : la fenêtre recouvre tout l'écran (en-tête compris), même sur mobile
+  return createPortal(
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" style={{ maxWidth }} role="dialog" aria-modal="true">
         <div className="modal-header">
@@ -35,6 +37,7 @@ export default function Modal({ open, title, onClose, children, footer, maxWidth
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

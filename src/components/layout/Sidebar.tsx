@@ -20,6 +20,7 @@ import {
   LogOut,
   PanelLeftClose,
   PanelRightOpen,
+  X,
   Building2,
   BarChart3,
   ScrollText,
@@ -58,9 +59,14 @@ const allNavItems: NavItemConfig[] = [
 export default function Sidebar({
   collapsed,
   onToggle,
+  mobileOpen = false,
+  onCloseMobile,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  /** Tablettes et téléphones : tiroir ouvert */
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }) {
   const pathname = usePathname();
   const { profile, logout } = useAuth();
@@ -90,7 +96,7 @@ export default function Sidebar({
   const namePrefix = profile?.role.startsWith('medecin') ? 'Dr. ' : '';
 
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Navigation principale">
       {/* Logo */}
       <div className="sidebar-logo">
         <button
@@ -110,6 +116,16 @@ export default function Sidebar({
           <h1>Nyagbadali</h1>
           <span>Gestion Hospitalière</span>
         </div>
+
+        <button
+          type="button"
+          className="sidebar-toggle sidebar-close"
+          onClick={onCloseMobile}
+          aria-label="Fermer le menu"
+          title="Fermer le menu"
+        >
+          <X size={16} />
+        </button>
       </div>
 
       {/* Navigation filtrée par rôle */}

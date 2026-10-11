@@ -608,69 +608,6 @@ body {
   }
 }
 
-@media (max-width: 1024px) {
-  .app-layout {
-    flex-direction: column;
-  }
-
-  .sidebar {
-    position: relative;
-    width: 100%;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-    box-shadow: none;
-  }
-
-  .main-content,
-  .main-content.sidebar-collapsed {
-    margin-left: 0;
-  }
-
-  .sidebar-nav {
-    max-height: none;
-  }
-}
-
-@media (max-width: 768px) {
-  .header {
-    height: auto;
-    min-height: 72px;
-    padding: 12px 14px;
-    flex-wrap: wrap;
-  }
-
-  .header-search {
-    max-width: none;
-    width: 100%;
-    order: 2;
-  }
-
-  .header-right {
-    width: 100%;
-    justify-content: space-between;
-    order: 1;
-  }
-
-  .header-date {
-    border-left: none;
-    padding-left: 0;
-  }
-
-  .page-content {
-    padding: 12px;
-  }
-
-  .page-surface {
-    padding: 12px;
-    border-radius: 18px;
-  }
-
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 .page-content {
   flex: 1;
   padding: 18px 20px 26px;
@@ -1553,46 +1490,342 @@ body {
 }
 
 /* ============================================ */
-/* RESPONSIVE                                    */
+/* RESPONSIVE — TABLETTES ET TÉLÉPHONES          */
 /* ============================================ */
+/* Bureau (> 1024px) : barre latérale fixe.
+   Tablette (≤ 1024px) : barre latérale en tiroir, ouverte par le bouton menu.
+   Téléphone (≤ 640px) : une colonne, tableaux défilants, fenêtres en plein écran. */
 
-@media (max-width: 1024px) {
-  .grid-sidebar {
-    grid-template-columns: 1fr;
-  }
-
-  .grid-3 {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.mobile-menu-btn,
+.sidebar-close,
+.sidebar-backdrop {
+  display: none;
 }
 
-@media (max-width: 768px) {
-  .sidebar {
-    width: var(--sidebar-collapsed-width);
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+@media (max-width: 1024px) {
+  /* Les tableaux larges défilent horizontalement dans leur carte au lieu d'élargir la page */
+  *:has(> .data-table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .main-content {
-    margin-left: var(--sidebar-collapsed-width);
+  html,
+  body {
+    overflow-x: hidden;
   }
 
-  .sidebar-logo-text,
-  .sidebar-link span,
-  .sidebar-section-title,
-  .sidebar-user-info,
-  .sidebar-link-badge {
+  /* --- Barre latérale en tiroir --- */
+  .sidebar,
+  .sidebar.collapsed {
+    width: min(300px, 86vw);
+    transform: translateX(-105%);
+    box-shadow: none;
+    z-index: 90;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 24px 0 60px rgba(15, 23, 42, 0.35);
+  }
+
+  .sidebar-toggle {
     display: none;
   }
 
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .sidebar-close {
+    display: inline-flex;
+    margin-left: auto;
   }
 
-  .grid-2,
-  .grid-3 {
-    grid-template-columns: 1fr;
+  .sidebar-nav {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(2px);
+    z-index: 80;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+
+  .sidebar-backdrop.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .main-content,
+  .main-content.sidebar-collapsed {
+    margin-left: 0;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* --- En-tête --- */
+  .mobile-menu-btn {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--neutral-700);
+  }
+
+  .header {
+    padding: 0 16px;
+    gap: 10px;
+  }
+
+  .header-date {
+    display: none;
+  }
+
+  .header .header-search {
+    min-width: 0;
   }
 
   .page-content {
+    padding: 14px;
+    min-width: 0;
+  }
+
+  .page-surface {
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  /* --- Grilles : panneaux latéraux sous le contenu principal --- */
+  .grid-sidebar,
+  .patient-layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [style*="grid-template-columns: 2fr 1fr"],
+  [style*="grid-template-columns: 1fr 2fr"],
+  [style*="grid-template-columns: 300px 1fr"],
+  [style*="grid-template-columns: 1fr 380px"],
+  [style*="grid-template-columns: repeat(auto-fit, minmax(420px"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  [style*="grid-template-columns: repeat(4, 1fr)"],
+  [style*="grid-template-columns: repeat(5, 1fr)"],
+  [style*="grid-template-columns: repeat(6, 1fr)"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  /* Les éléments de grille et de flex peuvent rétrécir (évite les débordements) */
+  [style*="display: grid"] > *,
+  .stats-grid > *,
+  .form-row > *,
+  .form-grid > * {
+    min-width: 0;
+  }
+
+  /* --- Onglets : défilement horizontal --- */
+  .tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabs > *,
+  .tab,
+  .tab-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 640px) {
+  /* --- En-tête : menu + icônes, recherche en dessous --- */
+  .header {
+    height: auto;
+    min-height: 60px;
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .header .header-search {
+    order: 3;
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  /* Barres de recherche dans les pages : une ligne entière */
+  .page-surface .header-search {
+    flex: 1 1 100% !important;
+    max-width: none;
+  }
+
+  .header-right {
+    gap: 4px;
+  }
+
+  .header-user-text {
+    display: none !important;
+  }
+
+  .header-user {
+    margin-left: 4px !important;
+    padding-left: 8px !important;
+  }
+
+  .page-content {
+    padding: 8px;
+  }
+
+  .page-surface {
+    padding: 14px 12px;
+    border-radius: 18px;
+  }
+
+  /* --- En-têtes de page : titre puis actions qui passent à la ligne --- */
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .page-header > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page-header > div:last-child:not(:first-child) {
+    flex-wrap: wrap;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  /* --- Toutes les grilles sur une colonne --- */
+  .stats-grid,
+  .form-row,
+  .form-grid,
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px;
+  }
+
+  [style*="grid-template-columns"]:not([style*="24px 1fr auto"]):not([style*="grid-template-columns: auto"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .stat-card {
     padding: 16px;
+  }
+
+  /* --- Rangées de boutons et de champs : passage à la ligne au lieu de déborder --- */
+  [style*="display: flex"]:not([style*="flex-direction: column"]):not([style*="nowrap"]):not(.data-table *):has(> .btn, > a.btn, > input, > select, > textarea, > .form-group, > .form-select, > .form-input, > .header-search, > .badge) {
+    flex-wrap: wrap;
+  }
+
+  .page-surface [style*="min-width"] {
+    min-width: 0 !important;
+  }
+
+  .page-surface [style*="width: 2"],
+  .page-surface [style*="width: 3"],
+  .page-surface [style*="width: 4"],
+  .page-surface [style*="width: 5"],
+  .page-surface [style*="width: 6"] {
+    max-width: 100%;
+  }
+
+  /* --- Cartes --- */
+  .card-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .card-body {
+    padding: 16px;
+  }
+
+  /* --- Tableaux --- */
+  .data-table thead th {
+    white-space: nowrap;
+  }
+
+  .data-table thead th,
+  .data-table tbody td {
+    padding: 10px 12px;
+  }
+
+  /* --- Formulaires : 16px évite le zoom automatique sur iPhone --- */
+  input,
+  select,
+  textarea,
+  .form-input,
+  .form-select,
+  .form-textarea,
+  .header-search input {
+    font-size: 16px;
+    max-width: 100%;
+  }
+
+  .btn {
+    white-space: normal;
+  }
+
+  /* --- Fenêtres modales : feuille ancrée en bas de l'écran --- */
+  .modal-overlay {
+    align-items: flex-end;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 100% !important;
+    max-height: 92vh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .modal-header {
+    padding: 16px;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .modal-footer {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+
+  .modal-footer .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  /* --- Dossier patient --- */
+  .patient-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
   }
 }
