@@ -10,6 +10,8 @@ import {
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { roleLabels, hasAccess } from '@/lib/role-permissions';
@@ -59,7 +61,7 @@ export default function ConsultationDetailsPage() {
         // Silencieux si la table du laboratoire n'existe pas encore
         supabase
           .from('analyses_laboratoire')
-          .select('id, type_analyse, statut, urgent, date_demande, resultats')
+          .select('id, type_analyse, statut, urgent, date_demande, resultats, created_at')
           .eq('consultation_id', id)
           .order('date_demande', { ascending: false }),
       ]);
@@ -75,6 +77,9 @@ export default function ConsultationDetailsPage() {
 
   // Délivrances de la pharmacie et résultats du laboratoire visibles sans recharger
   useLiveRefresh(fetchDetails, ['prescriptions', 'analyses_laboratoire'], { filter: id ? `consultation_id=eq.${id}` : undefined });
+
+  const presPages = usePagination(prescriptions);
+  const labPages = usePagination(analyses);
 
   if (loading) {
     return (
@@ -336,7 +341,7 @@ export default function ConsultationDetailsPage() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {prescriptions.map((pres) => (
+                  {presPages.pageItems.map((pres) => (
                     <div key={pres.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: 16, border: '1px solid var(--neutral-200)', borderRadius: 8, opacity: pres.statut === 'annulée' ? 0.55 : 1 }}>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--neutral-900)', textDecoration: pres.statut === 'annulée' ? 'line-through' : 'none' }}>
@@ -365,6 +370,7 @@ export default function ConsultationDetailsPage() {
                       </div>
                     </div>
                   ))}
+                  <Pagination page={presPages.page} pageCount={presPages.pageCount} total={presPages.total} onPageChange={presPages.setPage} label="prescriptions" />
                 </div>
               )}
             </div>
@@ -385,7 +391,7 @@ export default function ConsultationDetailsPage() {
                 <p style={{ textAlign: 'center', padding: '12px 0', color: 'var(--neutral-500)' }}>Aucun examen demandé lors de cette consultation.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {analyses.map((a) => {
+                  {labPages.pageItems.map((a) => {
                     const st = statusBadge(LAB_STATUTS, a.statut);
                     const anomalies = (a.resultats?.parametres || []).filter((p: any) => p.anormal).length;
                     const content = (
@@ -410,6 +416,7 @@ export default function ConsultationDetailsPage() {
                       ? <Link key={a.id} href={`/laboratoire/${a.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>{content}</Link>
                       : <div key={a.id}>{content}</div>;
                   })}
+                  <Pagination page={labPages.page} pageCount={labPages.pageCount} total={labPages.total} onPageChange={labPages.setPage} label="examens" />
                 </div>
               )}
             </div>

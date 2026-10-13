@@ -11,8 +11,6 @@ import {
   Mail,
   Eye,
   Edit,
-  ChevronLeft,
-  ChevronRight,
   Shield,
   Loader2,
   Inbox,
@@ -25,6 +23,8 @@ import { Lock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canManagePatients } from '@/lib/role-permissions';
 import { RestrictionBanner } from '@/components/AdminGuard';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 
 const RESERVE = "Accès refusé : opération réservée à l'accueil, au personnel soignant et à l'administration";
 // Apparence uniforme des boutons verrouillés (grisés, sans effet au survol)
@@ -32,8 +32,6 @@ const lockedStyle: React.CSSProperties = {
   background: 'var(--neutral-100)', color: 'var(--neutral-400)', border: '1px solid var(--neutral-200)',
   boxShadow: 'none', cursor: 'not-allowed', opacity: 1,
 };
-
-const PAGE_SIZE = 20;
 
 function getAge(dateNaissance: string): number {
   if (!dateNaissance) return 0;
@@ -58,7 +56,6 @@ export default function PatientsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [filterStatut, setFilterStatut] = useState<string>('tous');
   const [filterAssurance, setFilterAssurance] = useState<string>('tous');
-  const [page, setPage] = useState(1);
 
   useEffect(() => {
     async function fetchPatients() {
@@ -91,9 +88,7 @@ export default function PatientsPage() {
     return matchSearch && matchSexe && matchStatut && matchAssurance;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const { pageItems, page, pageCount, total, setPage } = usePagination(filtered, [search, filterSexe, filterStatut, filterAssurance]);
 
   const handleExport = () => {
     downloadCsv(
@@ -159,7 +154,7 @@ export default function PatientsPage() {
                 type="text"
                 placeholder="Rechercher par nom, code patient ou téléphone..."
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                onChange={(e) => { setSearch(e.target.value); }}
                 id="patient-search"
               />
             </div>
@@ -168,7 +163,7 @@ export default function PatientsPage() {
                 <select
                   className="form-select"
                   value={filterSexe}
-                  onChange={(e) => { setFilterSexe(e.target.value); setPage(1); }}
+                  onChange={(e) => { setFilterSexe(e.target.value); }}
                   style={{ width: 140 }}
                   id="filter-sexe"
                 >
@@ -176,13 +171,13 @@ export default function PatientsPage() {
                   <option value="M">Masculin</option>
                   <option value="F">Féminin</option>
                 </select>
-                <select className="form-select" value={filterStatut} onChange={(e) => { setFilterStatut(e.target.value); setPage(1); }} style={{ width: 150 }}>
+                <select className="form-select" value={filterStatut} onChange={(e) => { setFilterStatut(e.target.value); }} style={{ width: 150 }}>
                   <option value="tous">Tous les statuts</option>
                   <option value="actif">Actifs</option>
                   <option value="inactif">Inactifs</option>
                   <option value="décédé">Décédés</option>
                 </select>
-                <select className="form-select" value={filterAssurance} onChange={(e) => { setFilterAssurance(e.target.value); setPage(1); }} style={{ width: 160 }}>
+                <select className="form-select" value={filterAssurance} onChange={(e) => { setFilterAssurance(e.target.value); }} style={{ width: 160 }}>
                   <option value="tous">Assurés et non assurés</option>
                   <option value="oui">Assurés</option>
                   <option value="non">Non assurés</option>
@@ -326,39 +321,8 @@ export default function PatientsPage() {
         </table>
 
         {/* Pagination */}
-        {!loading && patients.length > 0 && (
-          <div style={{
-            padding: '14px 22px',
-            borderTop: '1px solid var(--neutral-100)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: 13,
-            color: 'var(--neutral-500)',
-          }}>
-            <span>
-              {filtered.length === 0
-                ? 'Aucun résultat'
-                : `Affichage de ${(currentPage - 1) * PAGE_SIZE + 1} à ${Math.min(currentPage * PAGE_SIZE, filtered.length)} sur ${filtered.length} patient${filtered.length > 1 ? 's' : ''}`}
-              {filtered.length !== patients.length && ` (${patients.length} au total)`}
-            </span>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <button className="btn btn-outline btn-sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
-                <ChevronLeft size={14} /> Précédent
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter((n) => n === 1 || n === totalPages || Math.abs(n - currentPage) <= 1)
-                .map((n, i, arr) => (
-                  <span key={n} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    {i > 0 && n - arr[i - 1] > 1 && <span>…</span>}
-                    <button className={`btn btn-sm ${n === currentPage ? 'btn-primary' : 'btn-outline'}`} onClick={() => setPage(n)}>{n}</button>
-                  </span>
-                ))}
-              <button className="btn btn-outline btn-sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
-                Suivant <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
+        {!loading && (
+          <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label={`patient${total > 1 ? 's' : ''}${total !== patients.length ? ` (${patients.length} au total)` : ''}`} />
         )}
       </div>
     </div>

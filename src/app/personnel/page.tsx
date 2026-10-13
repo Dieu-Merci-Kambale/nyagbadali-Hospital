@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import type { Personnel } from '@/types';
 
 const roleLabels: Record<string, string> = {
@@ -81,6 +83,7 @@ export default function PersonnelPage() {
     const matchRole = filterRole === 'tous' || p.role === filterRole;
     return matchSearch && matchRole;
   });
+  const { pageItems, page, pageCount, total, setPage } = usePagination(filtered, [search, filterRole]);
 
   if (loading) {
     return (
@@ -154,7 +157,7 @@ export default function PersonnelPage() {
         </div>
       ) : viewMode === 'grid' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 18 }}>
-          {filtered.map((person, index) => (
+          {pageItems.map((person, index) => (
             <div key={person.id} className="card animate-slide-up" style={{ animationDelay: `${index * 0.05}s`, cursor: 'pointer' }}>
               <div className="card-body" style={{ textAlign: 'center', padding: '28px 22px 22px' }}>
                 <div className={`avatar avatar-xl ${avatarColors[index % avatarColors.length]}`} style={{ margin: '0 auto 14px' }}>
@@ -184,6 +187,9 @@ export default function PersonnelPage() {
               </div>
             </div>
           ))}
+          <div className="card" style={{ gridColumn: '1 / -1' }}>
+            <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="membres du personnel" />
+          </div>
         </div>
       ) : (
         <div className="card">
@@ -200,7 +206,7 @@ export default function PersonnelPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((person, index) => (
+              {pageItems.map((person, index) => (
                 <tr key={person.id}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -223,6 +229,7 @@ export default function PersonnelPage() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="membres du personnel" />
         </div>
       )}
     </div>

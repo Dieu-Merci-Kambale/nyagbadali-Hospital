@@ -19,6 +19,8 @@ import {
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { LAB_STATUTS, statusBadge, formatDate, formatTime, explainDbError } from '@/lib/format';
 import { statutDemande } from '@/lib/lab-catalogue';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
@@ -94,11 +96,7 @@ export default function LaboratoirePage() {
     const matchTab = tab === 'tous' || (tab === 'actifs' ? estActive(d) : d.statut === tab);
     return matchSearch && matchTab;
   });
-
-  // Les demandes urgentes passent en tête des listes de travail
-  const sorted = tab === 'terminé' || tab === 'tous'
-    ? filtered
-    : [...filtered].sort((a, b) => Number(!!b.urgent) - Number(!!a.urgent));
+  const { pageItems, page, pageCount, total, setPage } = usePagination(filtered, [search, tab]);
 
   if (loading) {
     return (
@@ -176,7 +174,7 @@ export default function LaboratoirePage() {
         ))}
       </div>
 
-      {sorted.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="card">
           <div className="card-body">
             <div className="empty-state">
@@ -200,7 +198,7 @@ export default function LaboratoirePage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((d) => {
+              {pageItems.map((d) => {
                 const st = statusBadge(LAB_STATUTS, d.statut);
                 const ex = (d.analyses_laboratoire || []) as any[];
                 const actifs = ex.filter((a) => a.statut !== 'annulé');
@@ -256,6 +254,7 @@ export default function LaboratoirePage() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="demandes" />
         </div>
       )}
     </div>

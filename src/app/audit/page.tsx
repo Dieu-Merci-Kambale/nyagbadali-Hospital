@@ -3,6 +3,8 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { ScrollText, Loader2, Search, RefreshCw, AlertTriangle, Inbox, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { formatDateTime, downloadCsv, explainDbError, startOfDayISO, endOfDayISO } from '@/lib/format';
 import type { AuditLog } from '@/types';
 
@@ -82,6 +84,7 @@ export default function AuditPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+  const { pageItems, page, pageCount, total, setPage } = usePagination(logs, [table, action, user, date]);
 
   const exportCsv = () => downloadCsv(
     `journal-activite-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -147,7 +150,7 @@ export default function AuditPage() {
               </tr>
             </thead>
             <tbody>
-              {logs.map((l) => {
+              {pageItems.map((l) => {
                 const a = ACTIONS[l.action] || { label: l.action, badge: 'badge-neutral' };
                 const changes = changedFields(l);
                 const isOpen = expanded === l.id;
@@ -194,6 +197,7 @@ export default function AuditPage() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="actions" />
           {logs.length === 500 && <p style={{ padding: 12, fontSize: 12, color: 'var(--neutral-500)', textAlign: 'center' }}>Affichage limité aux 500 dernières entrées : affinez les filtres pour remonter plus loin.</p>}
         </div>
       )}

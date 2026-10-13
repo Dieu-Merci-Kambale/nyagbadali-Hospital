@@ -31,6 +31,8 @@ import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { MOUVEMENT_TYPES, statusBadge, formatDateTime, formatMoney, downloadCsv, explainDbError } from '@/lib/format';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import type { Medicament } from '@/types';
 import { useConfirm } from '@/context/ConfirmContext';
 
@@ -243,6 +245,13 @@ export default function PharmacieHubPage() {
     loadData();
   };
 
+  // --- LISTES PAGINÉES (10 lignes, plus récentes en premier) ---
+  const medsFiltres = medicaments.filter(m => (search === '' || m.nom_commercial.toLowerCase().includes(search.toLowerCase()) || m.code.toLowerCase().includes(search.toLowerCase())) && (filterStatut === 'tous' || m.statut === filterStatut));
+  const mouvementsFiltres = mouvements.filter((m) => mvtFilter === 'tous' || m.type === mvtFilter);
+  const presPages = usePagination(prescriptions);
+  const medsPages = usePagination(medsFiltres, [search, filterStatut]);
+  const mvtPages = usePagination(mouvementsFiltres, mvtFilter);
+
   // --- RENDERS ---
 
   if (loading) {
@@ -425,7 +434,7 @@ export default function PharmacieHubPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {prescriptions.map((pres) => (
+              {presPages.pageItems.map((pres) => (
                 <div key={pres.id} className="card" style={{ borderLeft: '4px solid var(--primary-500)' }}>
                   <div className="card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ flex: 2 }}>
@@ -473,6 +482,9 @@ export default function PharmacieHubPage() {
                   </div>
                 </div>
               ))}
+              <div className="card">
+                <Pagination page={presPages.page} pageCount={presPages.pageCount} total={presPages.total} onPageChange={presPages.setPage} label="prescriptions" />
+              </div>
             </div>
           )}
         </div>
@@ -529,7 +541,7 @@ export default function PharmacieHubPage() {
             </div>
           </div>
 
-          {medicaments.filter(m => (search === '' || m.nom_commercial.toLowerCase().includes(search.toLowerCase()) || m.code.toLowerCase().includes(search.toLowerCase())) && (filterStatut === 'tous' || m.statut === filterStatut)).length === 0 ? (
+          {medsFiltres.length === 0 ? (
             <div className="card">
               <div className="card-body">
                 <div className="empty-state">
@@ -555,7 +567,7 @@ export default function PharmacieHubPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {medicaments.filter(m => (search === '' || m.nom_commercial.toLowerCase().includes(search.toLowerCase()) || m.code.toLowerCase().includes(search.toLowerCase())) && (filterStatut === 'tous' || m.statut === filterStatut)).map((med) => {
+                    {medsPages.pageItems.map((med) => {
                       const isLow = med.stock_actuel > 0 && med.stock_actuel <= med.stock_minimum;
                       return (
                         <tr key={med.id}>
@@ -607,10 +619,11 @@ export default function PharmacieHubPage() {
                     })}
                   </tbody>
                 </table>
+                <Pagination page={medsPages.page} pageCount={medsPages.pageCount} total={medsPages.total} onPageChange={medsPages.setPage} label="médicaments" />
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-                {medicaments.filter(m => (search === '' || m.nom_commercial.toLowerCase().includes(search.toLowerCase()) || m.code.toLowerCase().includes(search.toLowerCase())) && (filterStatut === 'tous' || m.statut === filterStatut)).map((med, index) => {
+                {medsPages.pageItems.map((med, index) => {
                   const stockPercent = Math.min(100, (med.stock_actuel / (med.stock_minimum * 3)) * 100);
                   const isLow = med.stock_actuel <= med.stock_minimum;
                   return (
@@ -668,6 +681,9 @@ export default function PharmacieHubPage() {
                     </div>
                   );
                 })}
+                <div className="card" style={{ gridColumn: '1 / -1' }}>
+                  <Pagination page={medsPages.page} pageCount={medsPages.pageCount} total={medsPages.total} onPageChange={medsPages.setPage} label="médicaments" />
+                </div>
               </div>
             )
           )}
@@ -700,7 +716,7 @@ export default function PharmacieHubPage() {
                   <Download size={16} /> Exporter (CSV)
                 </button>
               </div>
-              {mouvements.filter((m) => mvtFilter === 'tous' || m.type === mvtFilter).length === 0 ? (
+              {mouvementsFiltres.length === 0 ? (
                 <div className="card"><div className="card-body"><div className="empty-state">
                   <Inbox className="empty-state-icon" />
                   <h3>Aucun mouvement</h3>
@@ -721,7 +737,7 @@ export default function PharmacieHubPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {mouvements.filter((m) => mvtFilter === 'tous' || m.type === mvtFilter).map((m) => {
+                      {mvtPages.pageItems.map((m) => {
                         const t = statusBadge(MOUVEMENT_TYPES, m.type);
                         return (
                           <tr key={m.id}>
@@ -745,6 +761,7 @@ export default function PharmacieHubPage() {
                       })}
                     </tbody>
                   </table>
+                  <Pagination page={mvtPages.page} pageCount={mvtPages.pageCount} total={mvtPages.total} onPageChange={mvtPages.setPage} label="mouvements" />
                 </div>
               )}
             </>

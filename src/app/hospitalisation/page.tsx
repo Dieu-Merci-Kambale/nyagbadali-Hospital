@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toDateKey } from '@/lib/format';
@@ -78,6 +80,7 @@ export default function HospitalisationPage() {
     const matchStatut = filterStatut === 'tous' || h.statut === filterStatut;
     return matchSearch && matchStatut;
   });
+  const { pageItems, page, pageCount, total, setPage } = usePagination(filtered, [search, filterStatut]);
 
   if (loading) {
     return (
@@ -192,7 +195,7 @@ export default function HospitalisationPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((hosp: any, index: number) => {
+              {pageItems.map((hosp: any, index: number) => {
                 const isActif = hosp.statut === 'actif';
                 return (
                   <tr key={hosp.id} className="animate-slide-in-right" style={{ animationDelay: `${index * 0.03}s` }}>
@@ -246,6 +249,7 @@ export default function HospitalisationPage() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="hospitalisations" />
         </div>
       )}
     </div>

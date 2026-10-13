@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Building2, Plus, Loader2, Edit, Users, BedDouble, Phone, Layers, Save, Trash2, Inbox, Crown } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { useConfirm } from '@/context/ConfirmContext';
 import Modal from '@/components/ui/Modal';
 import { explainDbError } from '@/lib/format';
@@ -95,6 +97,7 @@ export default function DepartementsPage() {
   };
 
   const actifs = personnel.filter((p) => p.statut === 'actif');
+  const { pageItems, page, pageCount, total, setPage } = usePagination(departements);
 
   return (
     <div className="animate-fade-in">
@@ -118,7 +121,7 @@ export default function DepartementsPage() {
         </div></div></div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 18 }}>
-          {departements.map((d) => {
+          {pageItems.map((d) => {
             const membres = personnel.filter((p) => p.departement_id === d.id);
             const medecins = membres.filter((p) => p.role?.startsWith('medecin')).length;
             const nbChambres = chambres.filter((c) => c.departement_id === d.id).length;
@@ -177,6 +180,9 @@ export default function DepartementsPage() {
               </div>
             );
           })}
+          <div className="card" style={{ gridColumn: '1 / -1' }}>
+            <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="départements" />
+          </div>
         </div>
       )}
 

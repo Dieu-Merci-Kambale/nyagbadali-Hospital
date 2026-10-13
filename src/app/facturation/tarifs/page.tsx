@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Search, Loader2, Edit, AlertTriangle, Save, Inbox, BookOpen, Lock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { useConfirm } from '@/context/ConfirmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import Modal from '@/components/ui/Modal';
@@ -100,6 +102,7 @@ export default function TarifsPage() {
       (categorie === 'toutes' || a.categorie === categorie) &&
       (q === '' || a.libelle.toLowerCase().includes(q) || a.code.toLowerCase().includes(q));
   });
+  const { pageItems, page, pageCount, total, setPage } = usePagination(filtered, [search, categorie, showInactifs]);
 
   return (
     <div className="animate-fade-in">
@@ -171,7 +174,7 @@ export default function TarifsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a) => (
+              {pageItems.map((a) => (
                 <tr key={a.id} style={{ opacity: a.actif ? 1 : 0.5 }}>
                   <td style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: 12 }}>{a.code}</td>
                   <td style={{ fontWeight: 600 }}>{a.libelle}</td>
@@ -197,6 +200,7 @@ export default function TarifsPage() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="actes" />
         </div>
       )}
 

@@ -16,6 +16,8 @@ import {
   Eye
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { isAdminRole, RestrictionBanner } from '@/components/AdminGuard';
 
@@ -64,6 +66,7 @@ export default function ChambresPage() {
       (c.departement?.nom && c.departement.nom.toLowerCase().includes(s))
     );
   });
+  const { pageItems, page, pageCount, total, setPage } = usePagination(filtered, search);
 
   // Calcul des statistiques
   const totalChambres = chambres.length;
@@ -196,7 +199,7 @@ export default function ChambresPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c, index) => {
+              {pageItems.map((c, index) => {
                 const totalL = c.lits ? c.lits.length : 0;
                 // Alerte si la capacité max est atteinte ou si les lits dépassent
                 const statusColor = totalL < c.capacite ? 'var(--warning-600)' : (totalL > c.capacite ? 'var(--danger-600)' : 'var(--success-600)');
@@ -229,6 +232,7 @@ export default function ChambresPage() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="chambres" />
         </div>
       )}
     </div>

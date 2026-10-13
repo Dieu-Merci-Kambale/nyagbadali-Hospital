@@ -26,6 +26,8 @@ import {
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { hasAccess, roleLabels } from '@/lib/role-permissions';
@@ -174,6 +176,7 @@ export default function RendezVousPage() {
     }
     return matchStatut && matchSearch && matchDate;
   });
+  const { pageItems, page, pageCount, total, setPage } = usePagination(filtered, [filterStatut, search, appliedDateDebut, appliedDateFin]);
 
   if (loading) {
     return (
@@ -394,7 +397,7 @@ export default function RendezVousPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((rdv: any) => {
+                  {pageItems.map((rdv: any) => {
                     const st = statusBadge(RDV_STATUTS, rdv.statut);
                     return (
                       <tr key={rdv.id}>
@@ -419,6 +422,7 @@ export default function RendezVousPage() {
                   })}
                 </tbody>
               </table>
+              <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="rendez-vous" />
             </div>
           )}
         </>

@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { roleLabels, hasAccess } from '@/lib/role-permissions';
@@ -168,6 +170,9 @@ export default function HospitalisationDetailPage() {
     router.push(`/facturation/nouvelle?hospitalisation_id=${id}`);
   };
 
+  const visibleSuivis = suivis.filter((s) => filterType === 'tous' || s.type === filterType);
+  const suivisPages = usePagination(visibleSuivis, filterType);
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
@@ -191,7 +196,6 @@ export default function HospitalisationDetailPage() {
   const patient = hosp.patients || {};
   const age = getAge(patient.date_naissance);
   const jours = daysBetween(hosp.date_admission, hosp.date_sortie || new Date());
-  const visibleSuivis = suivis.filter((s) => filterType === 'tous' || s.type === filterType);
   const canBill = profile ? hasAccess(profile.role, 'facturation') : false;
 
   return (
@@ -314,7 +318,7 @@ export default function HospitalisationDetailPage() {
                 <p style={{ textAlign: 'center', color: 'var(--neutral-500)', padding: '16px 0' }}>Aucune entrée de suivi pour le moment.</p>
               ) : (
                 <div className="timeline">
-                  {visibleSuivis.map((s) => {
+                  {suivisPages.pageItems.map((s) => {
                     const t = statusBadge(SUIVI_TYPES, s.type);
                     return (
                       <div key={s.id} className="timeline-item">
@@ -338,6 +342,7 @@ export default function HospitalisationDetailPage() {
                       </div>
                     );
                   })}
+                  <Pagination page={suivisPages.page} pageCount={suivisPages.pageCount} total={suivisPages.total} onPageChange={suivisPages.setPage} label="suivis" />
                 </div>
               )}
             </div>

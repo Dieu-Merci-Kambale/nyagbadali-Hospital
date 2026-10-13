@@ -22,6 +22,8 @@ import {
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { roleLabels } from '@/lib/role-permissions';
 import { downloadInvoicePdf } from '@/lib/invoice';
@@ -105,6 +107,7 @@ export default function FacturationPage() {
 
     return matchSearch && matchStatut && matchDate;
   });
+  const { pageItems, page, pageCount, total, setPage } = usePagination(filtered, [search, filterStatut, appliedStartDate, appliedEndDate]);
 
   const handleDownload = async (factureId: string) => {
     setDownloading(factureId);
@@ -259,7 +262,7 @@ export default function FacturationPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((facture: any, index: number) => {
+              {pageItems.map((facture: any, index: number) => {
                 const config = statutConfig[facture.statut] || statutConfig['en_attente'];
                 const reste = facture.montant_patient - (facture.montant_paye || 0);
                 return (
@@ -302,6 +305,7 @@ export default function FacturationPage() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="factures" />
         </div>
       )}
     </div>

@@ -30,6 +30,8 @@ import {
   formatMoney, formatDate, formatTime, statusBadge, RDV_STATUTS, RDV_TYPES, HOSP_STATUTS, LAB_STATUTS, FACTURE_STATUTS, daysBetween,
 } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { buildPatientDocumentPdf } from '@/lib/document-models';
 import { useAuth } from '@/contexts/AuthContext';
 import { roleLabels } from '@/lib/role-permissions';
@@ -92,7 +94,7 @@ export default function PatientDossierPage() {
         supabase.from('factures').select('*, paiements(montant)').eq('patient_id', id).order('date_facture', { ascending: false }),
         supabase.from('rendez_vous').select('*, personnel(nom, prenom, specialite)').eq('patient_id', id).order('date_heure', { ascending: false }),
         supabase.from('hospitalisations').select('*, lits(numero, chambres(numero)), medecin:personnel(nom, prenom)').eq('patient_id', id).order('date_admission', { ascending: false }),
-        supabase.from('analyses_laboratoire').select('id, type_analyse, statut, urgent, date_demande, date_resultat, resultats').eq('patient_id', id).order('date_demande', { ascending: false }),
+        supabase.from('analyses_laboratoire').select('id, type_analyse, statut, urgent, date_demande, date_resultat, resultats, created_at').eq('patient_id', id).order('date_demande', { ascending: false }),
       ]);
 
       setFactures((factureData || []).map((f: any) => ({
@@ -108,6 +110,13 @@ export default function PatientDossierPage() {
     
     fetchDossier();
   }, [id]);
+
+  // Historiques paginés (10 lignes, plus récents en premier)
+  const consPages = usePagination(consultations);
+  const rdvPages = usePagination(rendezVous);
+  const hospPages = usePagination(hospitalisations);
+  const labPages = usePagination(analyses);
+  const facPages = usePagination(factures);
 
   if (loading) {
     return (
@@ -403,6 +412,7 @@ export default function PatientDossierPage() {
               Aucune consultation trouvée.
             </div>
           ) : (
+            <>
             <table className="data-table">
               <thead>
                 <tr>
@@ -414,7 +424,7 @@ export default function PatientDossierPage() {
                 </tr>
               </thead>
               <tbody>
-                {consultations.map(c => (
+                {consPages.pageItems.map(c => (
                   <tr key={c.id}>
                     <td style={{ fontWeight: 600 }}>
                       {new Date(c.date_consultation).toLocaleDateString('fr-FR')}<br/>
@@ -436,6 +446,8 @@ export default function PatientDossierPage() {
                 ))}
               </tbody>
             </table>
+            <Pagination page={consPages.page} pageCount={consPages.pageCount} total={consPages.total} onPageChange={consPages.setPage} label="consultations" />
+            </>
           )}
         </div>
       )}
@@ -450,10 +462,11 @@ export default function PatientDossierPage() {
           {rendezVous.length === 0 ? (
             <div className="card-body" style={{ textAlign: 'center', padding: 40, color: 'var(--neutral-400)' }}>Aucun rendez-vous.</div>
           ) : (
+            <>
             <table className="data-table">
               <thead><tr><th>Date</th><th>Médecin</th><th>Motif</th><th>Type</th><th>Statut</th></tr></thead>
               <tbody>
-                {rendezVous.map((r) => {
+                {rdvPages.pageItems.map((r) => {
                   const st = statusBadge(RDV_STATUTS, r.statut);
                   return (
                     <tr key={r.id}>
@@ -467,6 +480,8 @@ export default function PatientDossierPage() {
                 })}
               </tbody>
             </table>
+            <Pagination page={rdvPages.page} pageCount={rdvPages.pageCount} total={rdvPages.total} onPageChange={rdvPages.setPage} label="rendez-vous" />
+            </>
           )}
         </div>
       )}
@@ -481,10 +496,11 @@ export default function PatientDossierPage() {
           {hospitalisations.length === 0 ? (
             <div className="card-body" style={{ textAlign: 'center', padding: 40, color: 'var(--neutral-400)' }}>Aucune hospitalisation.</div>
           ) : (
+            <>
             <table className="data-table">
               <thead><tr><th>Admission</th><th>Durée</th><th>Lit</th><th>Motif</th><th>Statut</th><th></th></tr></thead>
               <tbody>
-                {hospitalisations.map((h) => {
+                {hospPages.pageItems.map((h) => {
                   const st = statusBadge(HOSP_STATUTS, h.statut);
                   return (
                     <tr key={h.id}>
@@ -499,6 +515,8 @@ export default function PatientDossierPage() {
                 })}
               </tbody>
             </table>
+            <Pagination page={hospPages.page} pageCount={hospPages.pageCount} total={hospPages.total} onPageChange={hospPages.setPage} label="hospitalisations" />
+            </>
           )}
         </div>
       )}
@@ -513,10 +531,11 @@ export default function PatientDossierPage() {
           {analyses.length === 0 ? (
             <div className="card-body" style={{ textAlign: 'center', padding: 40, color: 'var(--neutral-400)' }}>Aucune analyse.</div>
           ) : (
+            <>
             <table className="data-table">
               <thead><tr><th>Demande</th><th>Examen</th><th>Résultat</th><th>Statut</th><th></th></tr></thead>
               <tbody>
-                {analyses.map((a) => {
+                {labPages.pageItems.map((a) => {
                   const st = statusBadge(LAB_STATUTS, a.statut);
                   const anomalies = (a.resultats?.parametres || []).filter((p: any) => p.anormal).length;
                   return (
@@ -534,6 +553,8 @@ export default function PatientDossierPage() {
                 })}
               </tbody>
             </table>
+            <Pagination page={labPages.page} pageCount={labPages.pageCount} total={labPages.total} onPageChange={labPages.setPage} label="examens" />
+            </>
           )}
         </div>
       )}
@@ -552,6 +573,7 @@ export default function PatientDossierPage() {
               Aucune facture trouvée.
             </div>
           ) : (
+            <>
             <table className="data-table">
               <thead>
                 <tr>
@@ -564,7 +586,7 @@ export default function PatientDossierPage() {
                 </tr>
               </thead>
               <tbody>
-                {factures.map(f => {
+                {facPages.pageItems.map(f => {
                   const reste = f.statut === 'annulée' ? 0 : Math.max(0, Number(f.montant_patient || 0) - (f.montant_paye || 0));
                   const st = statusBadge(FACTURE_STATUTS, f.statut);
                   return (
@@ -590,6 +612,8 @@ export default function PatientDossierPage() {
                 })}
               </tbody>
             </table>
+            <Pagination page={facPages.page} pageCount={facPages.pageCount} total={facPages.total} onPageChange={facPages.setPage} label="factures" />
+            </>
           )}
         </div>
       )}

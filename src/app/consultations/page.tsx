@@ -18,6 +18,8 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import Pagination from '@/components/ui/Pagination';
+import { usePagination } from '@/lib/usePagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDate, formatTime, toDateKey } from '@/lib/format';
 
@@ -77,6 +79,7 @@ export default function ConsultationsPage() {
   });
 
   const filtered = activeTab === 'toutes' ? base : base.filter((c) => c.statut === activeTab);
+  const { pageItems, page, pageCount, total, setPage } = usePagination(filtered, [activeTab, search, periode, mesConsultations]);
 
   if (loading) {
     return (
@@ -153,7 +156,7 @@ export default function ConsultationsPage() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {filtered.map((consultation: any, index: number) => {
+          {pageItems.map((consultation: any, index: number) => {
             const k = consultation.constantes || {};
             const tension = k.tension || (k.tension_systolique ? `${k.tension_systolique}/${k.tension_diastolique}` : '');
             const statutBadge = consultation.statut === 'en_cours' ? 'badge-warning' : consultation.statut === 'annulée' ? 'badge-danger' : 'badge-success';
@@ -235,6 +238,9 @@ export default function ConsultationsPage() {
               </div>
             );
           })}
+          <div className="card">
+            <Pagination page={page} pageCount={pageCount} total={total} onPageChange={setPage} label="consultations" />
+          </div>
         </div>
       )}
     </div>
