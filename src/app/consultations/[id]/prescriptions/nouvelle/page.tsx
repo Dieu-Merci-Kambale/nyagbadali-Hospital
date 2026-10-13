@@ -6,6 +6,13 @@ import { ArrowLeft, Save, AlertCircle, Loader2, Pill, Search, Check, X } from 'l
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
 import type { Medicament } from '@/types';
+import { explainDbError } from '@/lib/format';
+
+/** Médicament prescriptible : en stock à la pharmacie et non périmé */
+function estDisponible(m: Medicament): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  return m.stock_actuel > 0 && m.statut !== 'rupture' && m.statut !== 'expiré' && !(m.date_peremption && m.date_peremption < today);
+}
 
 export default function NouvellePrescriptionPage() {
   const router = useRouter();
@@ -23,7 +30,7 @@ export default function NouvellePrescriptionPage() {
   const [customNomMedicament, setCustomNomMedicament] = useState('');
   const [dosage, setDosage] = useState('');
   
-  // Fetch medicaments from inventory
+  // Médicaments disponibles à la pharmacie (seuls ceux-ci peuvent être prescrits)
   useEffect(() => {
     async function fetchMedicaments() {
       const { data, error } = await supabase
@@ -32,7 +39,7 @@ export default function NouvellePrescriptionPage() {
         .order('nom_commercial', { ascending: true });
         
       if (!error && data) {
-        setMedicaments(data as Medicament[]);
+        setMedicaments((data as Medicament[]).filter(estDisponible));
       }
       setLoading(false);
     }
@@ -68,8 +75,8 @@ export default function NouvellePrescriptionPage() {
     const formData = new FormData(e.currentTarget);
     
     const nom_med = customNomMedicament.trim();
-    if (!nom_med) {
-      setErrorMsg("Veuillez sélectionner ou saisir le nom d'un médicament.");
+    if (!selectedMedicamentId || !nom_med) {
+      setErrorMsg('Veuillez sélectionner un médicament disponible à la pharmacie.');
       return;
     }
 
@@ -87,7 +94,7 @@ export default function NouvellePrescriptionPage() {
     
     const dataToInsert = {
       consultation_id,
-      medicament_id: selectedMedicamentId || null,
+      medicament_id: selectedMedicamentId,
       nom_medicament: nom_med,
       dosage: formData.get('dosage') as string,
       voie_administration: formData.get('voie_administration') as string,
@@ -106,7 +113,7 @@ export default function NouvellePrescriptionPage() {
       router.push(`/consultations/${consultation_id}`);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
+      setErrorMsg(explainDbError(err) || 'Une erreur inattendue est survenue.');
       setSaving(false);
     }
   };
@@ -145,7 +152,7 @@ export default function NouvellePrescriptionPage() {
           <div className="card-body">
             
             <div className="form-group" style={{ position: 'relative' }}>
-              <label className="form-label">Rechercher dans l'inventaire (Optionnel)</label>
+              <label className="form-label">Médicament disponible à la pharmacie *</label>
               <div style={{ position: 'relative' }}>
                 <Search size={16} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--neutral-400)' }} />
                 <input
@@ -158,6 +165,7 @@ export default function NouvellePrescriptionPage() {
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
                     setSelectedMedicamentId('');
+                    setCustomNomMedicament('');
                     setIsDropdownOpen(true);
                   }}
                   onBlur={() => {
@@ -169,7 +177,7 @@ export default function NouvellePrescriptionPage() {
                   <button
                     type="button"
                     onClick={handleClearMedicament}
-                    title="Effacer (saisie libre)"
+                    title="Effacer"
                     style={{ position: 'absolute', right: 8, top: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neutral-400)', padding: 2 }}
                   >
                     <X size={16} />
@@ -196,27 +204,19 @@ export default function NouvellePrescriptionPage() {
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                       {filteredMedicaments.map(med => {
                         const isLow = med.stock_actuel <= med.stock_minimum;
-                        const isRupture = med.stock_actuel === 0;
                         return (
                           <li
                             key={med.id}
                             style={{
                               padding: '10px 16px',
-                              cursor: isRupture ? 'not-allowed' : 'pointer',
-                              opacity: isRupture ? 0.5 : 1,
+                              cursor: 'pointer',
                               borderBottom: '1px solid var(--neutral-100)',
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
                               backgroundColor: selectedMedicamentId === med.id ? 'var(--primary-50)' : 'transparent'
                             }}
-                            onMouseDown={(e) => {
-                              if (isRupture) {
-                                e.preventDefault();
-                                return;
-                              }
-                              handleSelectMedicament(med);
-                            }}
+                            onMouseDown={() => handleSelectMedicament(med)}
                           >
                             <div>
                               <div style={{ fontWeight: 500 }}>
@@ -224,9 +224,7 @@ export default function NouvellePrescriptionPage() {
                               </div>
                               <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>
                                 {med.nom_generique ? `${med.nom_generique} • ` : ''}Stock: {med.stock_actuel}
-                                {isRupture ? (
-                                  <span style={{ color: 'var(--danger-600, #dc2626)', fontWeight: 500 }}> (Rupture)</span>
-                                ) : isLow ? (
+                                {isLow ? (
                                   <span style={{ color: 'var(--warning-600, #d97706)', fontWeight: 500 }}> (Faible)</span>
                                 ) : null}
                               </div>
@@ -238,13 +236,13 @@ export default function NouvellePrescriptionPage() {
                     </ul>
                   ) : (
                     <div style={{ padding: '16px', textAlign: 'center', color: 'var(--neutral-500)' }}>
-                      Aucun médicament trouvé. Saisissez le nom manuellement ci-dessous.
+                      Aucun médicament disponible à la pharmacie ne correspond à cette recherche.
                     </div>
                   )}
                 </div>
               )}
               <p style={{ fontSize: 12, color: 'var(--neutral-500)', marginTop: 4 }}>
-                Sélectionnez un médicament de la base de données pour faciliter la délivrance par la pharmacie. Les médicaments en rupture sont grisés. Laissez vide pour une saisie libre (médicament hors stock).
+                Seuls les médicaments disponibles à la pharmacie (en stock et non périmés) peuvent être prescrits.
               </p>
             </div>
 
@@ -257,10 +255,10 @@ export default function NouvellePrescriptionPage() {
                     type="text" 
                     className="form-input" 
                     value={customNomMedicament}
-                    onChange={(e) => setCustomNomMedicament(e.target.value)}
-                    style={{ paddingLeft: 36 }}
+                    readOnly
+                    style={{ paddingLeft: 36, background: 'var(--neutral-50)' }}
                     required 
-                    placeholder="Ex: Paracétamol" 
+                    placeholder="Sélectionnez un médicament ci-dessus" 
                   />
                 </div>
               </div>

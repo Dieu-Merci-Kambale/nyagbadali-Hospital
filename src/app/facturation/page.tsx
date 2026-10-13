@@ -17,6 +17,7 @@ import {
   Filter,
   BookOpen,
   FileSpreadsheet,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
@@ -26,7 +27,8 @@ import { roleLabels } from '@/lib/role-permissions';
 import { downloadInvoicePdf } from '@/lib/invoice';
 import PendingBillingCard from '@/components/facturation/PendingBillingCard';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, explainDbError } from '@/lib/format';
+import { useConfirm } from '@/context/ConfirmContext';
 
 const formatCDF = formatMoney;
 
@@ -39,6 +41,10 @@ const statutConfig: Record<string, { label: string; class: string; icon: React.R
 
 export default function FacturationPage() {
   const { profile } = useAuth();
+  const { confirm } = useConfirm();
+  // Seuls les administrateurs suppriment les factures annulées
+  const canDeleteAnnulees = !!profile && ['super_admin', 'admin'].includes(profile.role);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [factures, setFactures] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,6 +116,25 @@ export default function FacturationPage() {
     } finally {
       setDownloading(null);
     }
+  };
+
+  const handleDelete = async (facture: any) => {
+    const ok = await confirm({
+      title: 'Supprimer la facture',
+      message: `La facture annulée ${facture.numero_facture} sera définitivement supprimée. Cette action est irréversible. Continuer ?`,
+      confirmText: 'Oui, supprimer',
+      type: 'danger',
+    });
+    if (!ok) return;
+    setDeleting(facture.id);
+    const { data, error } = await supabase.from('factures').delete().eq('id', facture.id).select('id');
+    setDeleting(null);
+    if (error || !data?.length) {
+      toast.error(error ? explainDbError(error) : 'Suppression refusée : seuls les administrateurs suppriment les factures annulées.');
+      return;
+    }
+    toast.success('Facture supprimée.');
+    setFactures((prev) => prev.filter((f) => f.id !== facture.id));
   };
 
   const handleFilter = () => {
@@ -265,6 +290,11 @@ export default function FacturationPage() {
                         <button className="btn btn-sm btn-ghost" onClick={() => handleDownload(facture.id)} disabled={downloading === facture.id} title="Télécharger la facture PDF">
                           {downloading === facture.id ? <Loader2 size={14} className="animate-spin" /> : <Receipt size={14} style={{ marginRight: 4 }} />} PDF
                         </button>
+                        {canDeleteAnnulees && facture.statut === 'annulée' && !(facture.paiements || []).length && (
+                          <button className="btn btn-sm btn-ghost" onClick={() => handleDelete(facture)} disabled={deleting === facture.id} title="Supprimer la facture annulée" style={{ color: 'var(--danger)' }}>
+                            {deleting === facture.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

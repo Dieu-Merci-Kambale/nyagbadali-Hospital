@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Loader2, AlertCircle, FlaskConical, Syringe, Microscope, CheckCircle,
-  Printer, Plus, Trash2, Save, XCircle, Edit, User, Stethoscope, Siren,
+  Printer, Plus, Trash2, Save, XCircle, Edit, User, Stethoscope, Siren, Ban,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
@@ -39,6 +39,8 @@ export default function AnalyseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  // La facture portant l'examen est payée : condition pour le traiter
+  const [payee, setPayee] = useState(false);
 
   const [parametres, setParametres] = useState<ParametreAnalyse[]>([]);
   const [conclusion, setConclusion] = useState('');
@@ -67,12 +69,16 @@ export default function AnalyseDetailPage() {
       return;
     } else {
       setAnalyse(data);
+      const { data: p, error: pErr } = await supabase.rpc('analyses_payees', { p_ids: [data.id] });
+      if (pErr) console.error(pErr);
+      const estPayee = (p || []).length > 0;
+      setPayee(estPayee);
       const saved: ParametreAnalyse[] = data.resultats?.parametres || [];
       const template = findExamen(data.type_analyse)?.parametres.map((p) => ({ ...p, valeur: '', anormal: false })) || [];
       setParametres(saved.length ? saved : template.length ? template : [emptyParam()]);
       setConclusion(data.resultats?.texte || '');
       setObservations(data.observations || '');
-      setEditing(data.statut === 'en_cours');
+      setEditing(estPayee && data.statut === 'en_cours');
     }
     setLoading(false);
   }, [id, router]);
@@ -200,7 +206,9 @@ export default function AnalyseDetailPage() {
   const stepIndex = STEPS.findIndex((s) => s.key === analyse.statut);
   const patient = analyse.patients || {};
   const age = getAge(patient.date_naissance);
-  const showForm = canProcess && editing && !isAnnule;
+  const canWork = canProcess && payee;
+  const nonPaye = canProcess && !payee && !isAnnule && !isTermine;
+  const showForm = canWork && editing && !isAnnule;
 
   return (
     <div className="animate-fade-in">
@@ -262,7 +270,12 @@ export default function AnalyseDetailPage() {
               <Microscope size={16} /> Examen pris en charge par le laboratoire. Les résultats apparaîtront ici dès leur validation par le technicien.
             </div>
           )}
-          {canProcess && analyse.statut === 'demandé' && (
+          {nonPaye && (
+            <div className="alert alert-danger">
+              <Ban size={16} /> Facture non payée : demandez au patient de régler sa demande à la caisse avant toute analyse.
+            </div>
+          )}
+          {canWork && analyse.statut === 'demandé' && (
             <div className="alert alert-info" style={{ justifyContent: 'space-between' }}>
               <span>En attente de prélèvement sur le patient.</span>
               <button className="btn btn-primary btn-sm" onClick={handlePrelevement} disabled={saving}>
@@ -270,7 +283,7 @@ export default function AnalyseDetailPage() {
               </button>
             </div>
           )}
-          {canProcess && analyse.statut === 'prélevé' && (
+          {canWork && analyse.statut === 'prélevé' && (
             <div className="alert alert-info" style={{ justifyContent: 'space-between' }}>
               <span>Échantillon prélevé le {formatDateTime(analyse.date_prelevement)}.</span>
               <button className="btn btn-primary btn-sm" onClick={handleDemarrer} disabled={saving}>
@@ -283,7 +296,7 @@ export default function AnalyseDetailPage() {
           <div className="card">
             <div className="card-header">
               <span className="card-title"><Microscope size={16} /> Résultats</span>
-              {canProcess && isTermine && !editing && (
+              {canWork && isTermine && !editing && (
                 <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
                   <Edit size={14} /> Corriger
                 </button>

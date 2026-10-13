@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Loader2, AlertCircle, Printer, CreditCard, CheckCircle, Clock, FileText, Edit, Ban } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, Printer, CreditCard, CheckCircle, Clock, FileText, Edit, Ban, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { downloadInvoicePdf } from '@/lib/invoice';
 import { FACTURE_STATUTS, statusBadge, MODES_PAIEMENT, explainDbError } from '@/lib/format';
@@ -183,6 +183,8 @@ export default function FactureDetailsPage() {
   const printedBy = profile ? { prenom: profile.prenom, nom: profile.nom, role: roleLabels[profile.role] || profile.role } : undefined;
   const isAnnulee = facture.statut === 'annulée';
   const hasPaiements = (facture.paiements || []).length > 0;
+  // Seuls les administrateurs suppriment une facture, et seulement une fois annulée
+  const canDelete = isAnnulee && !hasPaiements && !!profile && ['super_admin', 'admin'].includes(profile.role);
   const statut = statusBadge(FACTURE_STATUTS, facture.statut);
 
   const handleDownloadInvoice = async () => {
@@ -209,6 +211,25 @@ export default function FactureDetailsPage() {
     }
     toast.success('Facture annulée.');
     setFacture({ ...facture, statut: 'annulée' });
+  };
+
+  const handleSupprimer = async () => {
+    const ok = await confirm({
+      title: 'Supprimer la facture',
+      message: `La facture annulée ${facture.numero_facture} sera définitivement supprimée. Cette action est irréversible. Continuer ?`,
+      confirmText: 'Oui, supprimer',
+      type: 'danger',
+    });
+    if (!ok) return;
+    setSaving(true);
+    const { data, error } = await supabase.from('factures').delete().eq('id', facture.id).select('id');
+    setSaving(false);
+    if (error || !data?.length) {
+      toast.error(error ? explainDbError(error) : 'Suppression refusée : seuls les administrateurs suppriment les factures annulées.');
+      return;
+    }
+    toast.success('Facture supprimée.');
+    router.push('/facturation');
   };
 
   return (
@@ -251,6 +272,11 @@ export default function FactureDetailsPage() {
                 <Ban size={16} /> Annuler
               </button>
             </>
+          )}
+          {canDelete && (
+            <button className="btn btn-outline" onClick={handleSupprimer} disabled={saving} style={{ color: 'var(--danger)' }}>
+              <Trash2 size={16} /> Supprimer
+            </button>
           )}
         </div>
       </div>

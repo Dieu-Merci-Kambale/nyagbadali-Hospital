@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ArrowLeft, Loader2, AlertCircle, Syringe, Microscope, Printer, FileText, Plus, XCircle, User, Stethoscope, Siren, CheckCircle, FlaskConical,
+  ArrowLeft, Loader2, AlertCircle, Syringe, Microscope, Printer, FileText, Plus, XCircle, User, Stethoscope, Siren, CheckCircle, FlaskConical, Ban,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
@@ -33,6 +33,8 @@ export default function DemandeLaboratoirePage() {
 
   const [demande, setDemande] = useState<any>(null);
   const [analyses, setAnalyses] = useState<any[]>([]);
+  // Examens dont la facture est payée : seuls ceux-ci peuvent être traités par le laboratoire
+  const [payees, setPayees] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingCount, setEditingCount] = useState(0);
@@ -66,6 +68,19 @@ export default function DemandeLaboratoirePage() {
     } else {
       setDemande(d);
       setAnalyses(a || []);
+      const ids = (a || []).map((x: any) => x.id);
+      if (ids.length) {
+        const { data: p, error: pErr } = await supabase.rpc('analyses_payees', { p_ids: ids });
+        if (pErr) {
+          console.error(pErr);
+          toast.error(pErr.code === 'PGRST202'
+            ? 'Vérification du paiement indisponible : exécutez le script supabase/migrations/20261013_factures_labo_prescriptions.sql dans Supabase.'
+            : explainDbError(pErr));
+        }
+        setPayees(new Set((p || []).map((x: { analyse_id: string }) => x.analyse_id)));
+      } else {
+        setPayees(new Set());
+      }
     }
     setLoading(false);
   }, [id]);
@@ -93,6 +108,7 @@ export default function DemandeLaboratoirePage() {
       .update({ ...patch, updated_at: new Date().toISOString() })
       .eq('demande_id', id)
       .eq('statut', from)
+      .in('id', [...payees])
       .select('id');
     setSaving(false);
     if (error) {
@@ -193,8 +209,9 @@ export default function DemandeLaboratoirePage() {
   const age = getAge(patient.date_naissance);
   const actifs = analyses.filter((a) => a.statut !== 'annulé');
   const valides = actifs.filter((a) => a.statut === 'terminé').length;
-  const aPrelever = analyses.filter((a) => a.statut === 'demandé').length;
-  const aDemarrer = analyses.filter((a) => a.statut === 'prélevé').length;
+  const aPrelever = analyses.filter((a) => a.statut === 'demandé' && payees.has(a.id)).length;
+  const aDemarrer = analyses.filter((a) => a.statut === 'prélevé' && payees.has(a.id)).length;
+  const impayes = analyses.filter((a) => ['demandé', 'prélevé', 'en_cours'].includes(a.statut) && !payees.has(a.id)).length;
   const global = statutDemande(analyses);
   const st = statusBadge(LAB_STATUTS, global);
   const stepIndex = STEPS.findIndex((s) => s.key === global);
@@ -245,6 +262,11 @@ export default function DemandeLaboratoirePage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {canProcess && impayes > 0 && (
+            <div className="alert alert-danger">
+              <Ban size={16} /> {impayes} examen(s) non payé(s) : demandez au patient de régler sa demande à la caisse avant toute analyse.
+            </div>
+          )}
           {canProcess && aPrelever > 0 && (
             <div className="alert alert-info" style={{ justifyContent: 'space-between' }}>
               <span>{aPrelever} examen(s) en attente de prélèvement.</span>
@@ -263,6 +285,7 @@ export default function DemandeLaboratoirePage() {
               key={`${a.id}-${a.updated_at || ''}`}
               analyse={a}
               canProcess={canProcess}
+              payee={payees.has(a.id)}
               profileId={profile?.id}
               onChanged={load}
               onEditingChange={(e) => setEditingCount((c) => Math.max(0, c + (e ? 1 : -1)))}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Microscope, CheckCircle, Plus, Trash2, Save, XCircle, Edit, Loader2, Siren } from 'lucide-react';
+import { Microscope, CheckCircle, Plus, Trash2, Save, XCircle, Edit, Loader2, Siren, Ban } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -22,6 +22,8 @@ type Props = {
   analyse: any;
   /** Peut faire avancer l'examen et saisir les résultats (laboratoire, médecins) */
   canProcess: boolean;
+  /** La facture portant l'examen est payée : condition pour le traiter */
+  payee: boolean;
   profileId?: string;
   onChanged: () => void;
   /** Signale au parent qu'une saisie est en cours (pour suspendre le rafraîchissement automatique) */
@@ -29,7 +31,7 @@ type Props = {
 };
 
 /** Un examen d'une demande : statut, démarrage, saisie et validation des résultats. */
-export default function AnalyseCard({ analyse, canProcess, profileId, onChanged, onEditingChange }: Props) {
+export default function AnalyseCard({ analyse, canProcess, payee, profileId, onChanged, onEditingChange }: Props) {
   const { confirm } = useConfirm();
   const [saving, setSaving] = useState(false);
   const [editing, setEditingState] = useState(false);
@@ -45,8 +47,11 @@ export default function AnalyseCard({ analyse, canProcess, profileId, onChanged,
   const st = statusBadge(LAB_STATUTS, analyse.statut);
   const isTermine = analyse.statut === 'terminé';
   const isAnnule = analyse.statut === 'annulé';
+  // Pas de traitement (prélèvement, analyse, résultats) tant que l'examen n'est pas payé
+  const canWork = canProcess && payee;
+  const nonPaye = canProcess && !payee && !isAnnule && !isTermine;
   // Le formulaire est ouvert d'office pour un examen en cours d'analyse
-  const showForm = canProcess && !isAnnule && (editing || analyse.statut === 'en_cours');
+  const showForm = canWork && !isAnnule && (editing || analyse.statut === 'en_cours');
 
   const update = async (patch: Record<string, unknown>, message: string) => {
     setSaving(true);
@@ -126,12 +131,13 @@ export default function AnalyseCard({ analyse, canProcess, profileId, onChanged,
         </span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span className={`badge ${st.badge}`}>{st.label}</span>
-          {canProcess && analyse.statut === 'prélevé' && (
+          {nonPaye && <span className="badge badge-danger"><Ban size={11} /> Non payé</span>}
+          {canWork && analyse.statut === 'prélevé' && (
             <button className="btn btn-primary btn-sm" onClick={handleDemarrer} disabled={saving}>
               <Microscope size={14} /> Démarrer
             </button>
           )}
-          {canProcess && isTermine && !editing && (
+          {canWork && isTermine && !editing && (
             <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}><Edit size={14} /> Corriger</button>
           )}
           {canProcess && !isTermine && !isAnnule && (
@@ -142,6 +148,11 @@ export default function AnalyseCard({ analyse, canProcess, profileId, onChanged,
         </div>
       </div>
       <div className="card-body">
+        {nonPaye && (
+          <div className="alert alert-danger" style={{ marginBottom: 12 }}>
+            <Ban size={16} /> Facture non payée : demandez au patient de régler sa demande à la caisse avant toute analyse.
+          </div>
+        )}
         {showForm ? (
           <>
             <table className="data-table" style={{ marginBottom: 12 }}>
