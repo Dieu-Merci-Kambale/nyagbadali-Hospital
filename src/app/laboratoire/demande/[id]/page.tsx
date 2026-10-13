@@ -10,7 +10,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { roleLabels, hasAccess } from '@/lib/role-permissions';
+import { roleLabels, hasAccess, canProcessLab } from '@/lib/role-permissions';
 import { buildLabRequestOrderPdf, buildLabRequestReportPdf } from '@/lib/document-models';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { LAB_CATALOGUE, statutDemande } from '@/lib/lab-catalogue';
@@ -44,7 +44,7 @@ export default function DemandeLaboratoirePage() {
 
   // Le traitement des analyses (prélèvement, résultats, validation, annulation) relève du laboratoire ;
   // les médecins demandent les examens et consultent les résultats.
-  const canProcess = profile ? ['super_admin', 'technicien_labo'].includes(profile.role) : false;
+  const canProcess = canProcessLab(profile?.role);
   const canRequest = profile ? hasAccess(profile.role, 'laboratoire') : false;
 
   const load = useCallback(async () => {

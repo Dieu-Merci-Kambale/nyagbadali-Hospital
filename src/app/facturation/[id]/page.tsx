@@ -12,7 +12,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { buildPaymentReceiptPdf } from '@/lib/document-models';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
-import { roleLabels } from '@/lib/role-permissions';
+import { roleLabels, canDeleteFacture } from '@/lib/role-permissions';
 
 function formatMoneySafe(value: number | string): string {
   const cleaned = typeof value === 'string' ? value.replace(/[^\d,.-]/g, '').replace(',', '.') : value;
@@ -184,7 +184,7 @@ export default function FactureDetailsPage() {
   const isAnnulee = facture.statut === 'annulée';
   const hasPaiements = (facture.paiements || []).length > 0;
   // Seuls les administrateurs suppriment une facture, et seulement une fois annulée
-  const canDelete = isAnnulee && !hasPaiements && !!profile && ['super_admin', 'admin'].includes(profile.role);
+  const canDelete = canDeleteFacture(profile?.role, facture);
   const statut = statusBadge(FACTURE_STATUTS, facture.statut);
 
   const handleDownloadInvoice = async () => {

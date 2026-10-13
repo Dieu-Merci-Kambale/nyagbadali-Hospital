@@ -25,7 +25,7 @@ import { supabase } from '@/lib/supabase';
 import Pagination from '@/components/ui/Pagination';
 import { usePagination } from '@/lib/usePagination';
 import { useAuth } from '@/contexts/AuthContext';
-import { roleLabels } from '@/lib/role-permissions';
+import { roleLabels, canDeleteFacture } from '@/lib/role-permissions';
 import { downloadInvoicePdf } from '@/lib/invoice';
 import PendingBillingCard from '@/components/facturation/PendingBillingCard';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
@@ -44,8 +44,6 @@ const statutConfig: Record<string, { label: string; class: string; icon: React.R
 export default function FacturationPage() {
   const { profile } = useAuth();
   const { confirm } = useConfirm();
-  // Seuls les administrateurs suppriment les factures annulées
-  const canDeleteAnnulees = !!profile && ['super_admin', 'admin'].includes(profile.role);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [factures, setFactures] = useState<any[]>([]);
@@ -293,7 +291,7 @@ export default function FacturationPage() {
                         <button className="btn btn-sm btn-ghost" onClick={() => handleDownload(facture.id)} disabled={downloading === facture.id} title="Télécharger la facture PDF">
                           {downloading === facture.id ? <Loader2 size={14} className="animate-spin" /> : <Receipt size={14} style={{ marginRight: 4 }} />} PDF
                         </button>
-                        {canDeleteAnnulees && facture.statut === 'annulée' && !(facture.paiements || []).length && (
+                        {canDeleteFacture(profile?.role, facture) && (
                           <button className="btn btn-sm btn-ghost" onClick={() => handleDelete(facture)} disabled={deleting === facture.id} title="Supprimer la facture annulée" style={{ color: 'var(--danger)' }}>
                             {deleting === facture.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                           </button>

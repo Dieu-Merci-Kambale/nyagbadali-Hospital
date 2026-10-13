@@ -7,12 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
 import type { Medicament } from '@/types';
 import { explainDbError } from '@/lib/format';
-
-/** Médicament prescriptible : en stock à la pharmacie et non périmé */
-function estDisponible(m: Medicament): boolean {
-  const today = new Date().toISOString().slice(0, 10);
-  return m.stock_actuel > 0 && m.statut !== 'rupture' && m.statut !== 'expiré' && !(m.date_peremption && m.date_peremption < today);
-}
+import { estPrescriptible } from '@/lib/medicaments';
 
 export default function NouvellePrescriptionPage() {
   const router = useRouter();
@@ -39,7 +34,7 @@ export default function NouvellePrescriptionPage() {
         .order('nom_commercial', { ascending: true });
         
       if (!error && data) {
-        setMedicaments((data as Medicament[]).filter(estDisponible));
+        setMedicaments((data as Medicament[]).filter((m) => estPrescriptible(m)));
       }
       setLoading(false);
     }

@@ -97,6 +97,18 @@ export function canManagePatients(role?: RolePersonnel | null): boolean {
   return !!role && PATIENT_EDITORS.includes(role);
 }
 
+/** Rôles qui traitent les analyses (prélèvement, résultats, validation) ; les médecins demandent et consultent. */
+const LAB_PROCESSORS: RolePersonnel[] = ['super_admin', 'technicien_labo'];
+
+export function canProcessLab(role?: RolePersonnel | null): boolean {
+  return !!role && LAB_PROCESSORS.includes(role);
+}
+
+/** Seuls les administrateurs suppriment une facture, et seulement une facture annulée sans paiement. */
+export function canDeleteFacture(role: RolePersonnel | null | undefined, facture: { statut: string; paiements?: unknown[] | null }): boolean {
+  return (role === 'super_admin' || role === 'admin') && facture.statut === 'annulée' && !(facture.paiements || []).length;
+}
+
 /**
  * Vérifie si un rôle donné a accès à un module spécifique.
  */

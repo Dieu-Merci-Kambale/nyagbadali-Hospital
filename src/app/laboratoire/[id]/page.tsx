@@ -11,7 +11,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { roleLabels } from '@/lib/role-permissions';
+import { roleLabels, canProcessLab } from '@/lib/role-permissions';
 import { buildLaboratoryDocumentPdf } from '@/lib/document-models';
 import { findExamen } from '@/lib/lab-catalogue';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
@@ -33,7 +33,7 @@ export default function AnalyseDetailPage() {
   const { profile } = useAuth();
   const { confirm } = useConfirm();
   // Le traitement des analyses relève du laboratoire ; les médecins demandent et consultent les résultats.
-  const canProcess = profile ? ['super_admin', 'technicien_labo'].includes(profile.role) : false;
+  const canProcess = canProcessLab(profile?.role);
 
   const [analyse, setAnalyse] = useState<any>(null);
   const [loading, setLoading] = useState(true);
