@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -11,6 +11,7 @@ import AdminGuard from '@/components/AdminGuard';
 import { canManagePatients } from '@/lib/role-permissions';
 import type { RolePersonnel } from '@/types';
 import { ETATS_CIVILS } from '@/lib/format';
+import AssureurSelect from '@/components/assurances/AssureurSelect';
 
 export default function EditPatientPage() {
   return (
@@ -35,6 +36,8 @@ function EditPatientForm() {
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [patient, setPatient] = useState<Partial<Patient>>({});
+  // Assureur enregistré au chargement (pour savoir si l'utilisateur l'a retiré)
+  const initial = useRef<{ assureurId: string | null }>({ assureurId: null });
   const { confirm } = useConfirm();
 
   // Charger les données du patient
@@ -52,6 +55,7 @@ function EditPatientForm() {
         setErrorMsg('Impossible de charger le dossier du patient.');
       } else if (data) {
         setPatient(data);
+        initial.current = { assureurId: data.assureur_id || null };
       }
       setLoading(false);
     }
@@ -90,7 +94,6 @@ function EditPatientForm() {
       telephone: (formData.get('telephone') as string) || null,
       email: (formData.get('email') as string) || null,
       adresse: (formData.get('adresse') as string) || null,
-      assureur: (formData.get('assureur') as string) || null,
       numero_assurance: (formData.get('numero_assurance') as string) || null,
       contact_urgence_nom: (formData.get('contact_urgence_nom') as string) || null,
       contact_urgence_tel: (formData.get('contact_urgence_tel') as string) || null,
@@ -102,6 +105,13 @@ function EditPatientForm() {
     const antecedents = ((formData.get('antecedents') as string) || '').trim();
     if ('allergies' in (patient || {}) || allergies) data.allergies = allergies || null;
     if ('antecedents' in (patient || {}) || antecedents) data.antecedents = antecedents || null;
+
+    // Assureur enregistré (module Assurances) : le nom est repris par la base.
+    // Un ancien assureur saisi en texte libre est conservé tant qu'aucun assureur n'est choisi.
+    if ('assureur_id' in (patient || {})) {
+      data.assureur_id = patient.assureur_id || null;
+      if (!patient.assureur_id && initial.current.assureurId) data.assureur = null;
+    }
 
     // Rubriques facultatives (colonnes ajoutées par la migration du 21/10/2026)
     const profession = ((formData.get('profession') as string) || '').trim();
@@ -258,15 +268,12 @@ function EditPatientForm() {
           <div className="card-body">
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label" htmlFor="assureur">Assureur</label>
-                <select className="form-select" name="assureur" id="assureur" value={patient.assureur || ''} onChange={handleChange}>
-                  <option value="">Pas d&apos;assurance</option>
-                  <option value="SONAS">SONAS</option>
-                  <option value="Rawsur">Rawsur</option>
-                  <option value="Activa">Activa</option>
-                  <option value="SANLAM">SANLAM</option>
-                  <option value="Autre">Autre</option>
-                </select>
+                <label className="form-label" htmlFor="assureur_id">Assureur</label>
+                <AssureurSelect
+                  value={patient.assureur_id || ''}
+                  onChange={(assureurId) => setPatient((prev) => ({ ...prev, assureur_id: assureurId || null }))}
+                  ancienNom={!patient.assureur_id ? patient.assureur : null}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="numero_assurance">Numéro de Police</label>

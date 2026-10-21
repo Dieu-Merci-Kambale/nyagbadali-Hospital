@@ -10,6 +10,23 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+/**
+ * Après une coupure réseau pendant un enregistrement, recherche l'opération en base
+ * (plusieurs essais espacés, le temps que la connexion revienne).
+ * `verifie` vaut false si la base n'a pas pu être interrogée (connexion toujours coupée).
+ */
+export async function retrouverOperation<T>(
+  requete: () => PromiseLike<{ data: T[] | null; error: unknown }>,
+  essais = 4,
+): Promise<{ trouve: T | null; verifie: boolean }> {
+  for (let i = 0; i < essais; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1500 * i));
+    const { data, error } = await requete();
+    if (!error) return { trouve: data?.[0] ?? null, verifie: true };
+  }
+  return { trouve: null, verifie: false };
+}
+
 export type Database = {
   public: {
     Tables: {

@@ -65,9 +65,11 @@ export default function DepensesPage() {
   const load = useCallback(async () => {
     const now = new Date();
     const debutMois = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const [depRes, payRes] = await Promise.all([
+    const [depRes, payRes, assRes] = await Promise.all([
       supabase.from('depenses').select('*, enregistreur:personnel!depenses_enregistre_par_fkey(nom, prenom)').order('date_depense', { ascending: false }),
       supabase.from('paiements').select('montant').gte('date_paiement', debutMois),
+      // Règlements des assureurs : entrées de caisse comme les paiements des patients
+      supabase.from('paiements_assurance').select('montant').eq('statut', 'validé').gte('date_paiement', debutMois),
     ]);
     if (depRes.error) {
       setDbError(explainDbError(depRes.error));
@@ -75,7 +77,7 @@ export default function DepensesPage() {
       setDbError('');
       setDepenses((depRes.data || []) as DepenseRow[]);
     }
-    setEncaisseMois((payRes.data || []) as { montant: number }[]);
+    setEncaisseMois([...(payRes.data || []), ...(assRes.data || [])] as { montant: number }[]);
     setLoading(false);
   }, []);
 
@@ -84,7 +86,7 @@ export default function DepensesPage() {
   }, [load]);
 
   // Mise à jour automatique (dépenses et encaissements saisis sur d'autres postes)
-  useLiveRefresh(load, ['depenses', 'paiements']);
+  useLiveRefresh(load, ['depenses', 'paiements', 'paiements_assurance']);
 
   const handleSave = async () => {
     if (!form || !profile) return;

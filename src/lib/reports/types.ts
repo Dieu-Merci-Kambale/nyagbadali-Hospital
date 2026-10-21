@@ -67,7 +67,7 @@ export type ReportFilter = {
   defaultValue: string;
 };
 
-export type ReportCategory = 'finances' | 'patients' | 'hospitalisation' | 'medical' | 'pharmacie' | 'laboratoire' | 'administration';
+export type ReportCategory = 'finances' | 'assurances' | 'patients' | 'hospitalisation' | 'medical' | 'pharmacie' | 'laboratoire' | 'administration';
 
 export type ReportContext = {
   period: Period | null;

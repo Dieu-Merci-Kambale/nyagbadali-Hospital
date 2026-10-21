@@ -25,6 +25,12 @@ const TABLES: Record<string, string> = {
   depenses: 'Dépenses',
   analyses_laboratoire: 'Laboratoire',
   actes_tarifs: 'Tarifs',
+  assureurs: 'Assureurs',
+  bordereaux_assurance: 'Bordereaux assurance',
+  bordereau_factures: 'Factures des bordereaux',
+  paiements_assurance: 'Règlements des assureurs',
+  paiements_assurance_factures: 'Ventilation des règlements',
+  litiges_assurance: 'Litiges assurance',
 };
 
 const ACTIONS: Record<string, { label: string; badge: string }> = {

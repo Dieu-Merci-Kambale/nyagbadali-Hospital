@@ -14,6 +14,7 @@ import {
   type InvoiceLine, type ElementAFacturer,
 } from '@/lib/invoice';
 import { formatMoney, explainDbError } from '@/lib/format';
+import { calculPartAssurance, chargerCouverture, type CouverturePatient } from '@/lib/assurances';
 import type { ActeTarif } from '@/types';
 
 function NouvelleFactureForm() {
@@ -30,7 +31,10 @@ function NouvelleFactureForm() {
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [initialPatientId, setInitialPatientId] = useState<string | null>(patientIdParam);
   const [resolving, setResolving] = useState(Boolean(!patientIdParam && (consultationId || hospitalisationId)));
+  // Assureur du patient : nom (ancien dossier) ou assureur enregistré avec ses conditions
   const [assureur, setAssureur] = useState<string | null>(null);
+  const [couverture, setCouverture] = useState<CouverturePatient | null>(null);
+  const [moduleAssurance, setModuleAssurance] = useState(false);
 
   const [elements, setElements] = useState<ElementAFacturer[]>([]);
   const [elementsLoading, setElementsLoading] = useState(false);
@@ -61,12 +65,18 @@ function NouvelleFactureForm() {
       setElements([]);
       setLignes([]);
       setAssureur(null);
+      setCouverture(null);
       return;
     }
     let ignore = false;
     setElementsLoading(true);
-    supabase.from('patients').select('assureur').eq('id', selectedPatientId).single().then(({ data }) => {
-      if (!ignore) setAssureur(data?.assureur || null);
+    chargerCouverture(selectedPatientId).then((res) => {
+      if (ignore) return;
+      setAssureur(res.nom);
+      setCouverture(res.couverture);
+      setModuleAssurance(res.module);
+      // Taux de l'assureur proposé par défaut ; aucun taux sans assureur enregistré
+      if (res.module) setTauxAssurance(res.couverture?.utilisable ? res.couverture.taux : 0);
     });
     fetchElementsAFacturer(selectedPatientId).then(({ elements: els, error }) => {
       if (ignore) return;
@@ -133,8 +143,11 @@ function NouvelleFactureForm() {
 
   const lignesValides = lignes.filter((l) => l.description.trim() !== '');
   const totalGlobal = lignesValides.reduce((acc, l) => acc + l.quantite * l.prix_unitaire, 0);
-  const montantAssurance = Math.round((totalGlobal * tauxAssurance) / 100);
+  const part = calculPartAssurance(totalGlobal, tauxAssurance, couverture?.plafond);
+  const montantAssurance = part.montant;
   const montantPatient = totalGlobal - montantAssurance;
+  // Avec le module Assurances, seule la part d'un assureur enregistré et actif est possible
+  const tauxModifiable = !moduleAssurance || !!couverture?.utilisable;
   const sansPrix = lignesValides.filter((l) => l.prix_unitaire <= 0);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -180,6 +193,7 @@ function NouvelleFactureForm() {
       tva: 0,
       statut: montantPatient === 0 ? 'payée' : 'en_attente',
       date_facture: new Date().toISOString(),
+      ...(montantAssurance > 0 && couverture ? { assureur_id: couverture.id } : {}),
     };
 
     const { error: factureError, data: facture } = await supabase.from('factures').insert([factureData]).select().single();
@@ -257,13 +271,27 @@ function NouvelleFactureForm() {
                   min="0"
                   max="100"
                   value={tauxAssurance}
+                  disabled={!tauxModifiable}
                   onChange={(e) => setTauxAssurance(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                 />
                 <p className="form-help">0 = aucune assurance (le patient paie tout). 100 = prise en charge totale.</p>
-                {assureur && (
-                  <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--primary-700)', marginTop: 6, fontWeight: 600 }}>
-                    <Shield size={14} /> Patient assuré : {assureur}
+                {couverture ? (
+                  <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: couverture.utilisable ? 'var(--primary-700)' : 'var(--danger)', marginTop: 6, fontWeight: 600, flexWrap: 'wrap' }}>
+                    <Shield size={14} /> {couverture.nom} — couverture {couverture.taux} %
+                    {couverture.plafond ? `, plafond ${formatMoney(couverture.plafond)}` : ''}
+                    {couverture.numero ? ` • N° ${couverture.numero}` : ''}
+                    {!couverture.actif && ' • assureur désactivé : aucune prise en charge'}
+                    {couverture.actif && couverture.echu && ' • contrat échu : aucune prise en charge'}
                   </p>
+                ) : assureur ? (
+                  <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: moduleAssurance ? 'var(--warning-600, #b45309)' : 'var(--primary-700)', marginTop: 6, fontWeight: 600 }}>
+                    <Shield size={14} /> {moduleAssurance ? `Assureur « ${assureur} » non enregistré : rattachez le patient à un assureur de la liste.` : `Patient assuré : ${assureur}`}
+                  </p>
+                ) : moduleAssurance && selectedPatientId ? (
+                  <p className="form-help">Patient sans assureur : le patient règle la totalité.</p>
+                ) : null}
+                {part.plafonne && (
+                  <p className="form-help" style={{ color: 'var(--warning-600, #b45309)' }}>Part assurance limitée au plafond par facture ({formatMoney(couverture?.plafond)}).</p>
                 )}
               </div>
             </div>

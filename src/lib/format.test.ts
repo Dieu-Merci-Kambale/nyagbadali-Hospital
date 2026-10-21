@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  capitalize, daysBetween, explainDbError, FACTURE_STATUTS, formatDate, formatMoney, getAge, statusBadge, toDateKey,
+  capitalize, daysBetween, explainDbError, isNetworkError, FACTURE_STATUTS, formatDate, formatMoney, getAge, statusBadge, toDateKey,
 } from './format';
 
 describe('formatMoney', () => {
@@ -98,6 +98,19 @@ describe('explainDbError', () => {
   it('indique le script à exécuter quand une fonction ou une table manque', () => {
     expect(explainDbError({ code: 'PGRST202', message: '' })).toContain('20261010_securite_roles.sql');
     expect(explainDbError({ code: '42P01', message: '' })).toContain('20261009_fonctionnalites_completes.sql');
+  });
+
+  it('explique une coupure réseau en français, sans affirmer que l’opération a échoué', () => {
+    const msg = explainDbError({ message: 'TypeError: Failed to fetch' });
+    expect(msg).toContain('Connexion au serveur interrompue');
+    expect(msg).toContain('peut-être été enregistrée');
+    expect(isNetworkError({ message: 'TypeError: Failed to fetch' })).toBe(true);
+    expect(isNetworkError({ message: 'NetworkError when attempting to fetch resource.' })).toBe(true);
+    expect(isNetworkError({ message: 'permission denied' })).toBe(false);
+  });
+
+  it('indique le script du module Assurances quand ses objets manquent', () => {
+    expect(explainDbError({ code: 'PGRST205', message: "Could not find the table 'public.assureurs'" })).toContain('20261021_assurances.sql');
   });
 
   it('gère une erreur absente', () => {

@@ -5,14 +5,16 @@ import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertCircle, Printer, CreditCard, CheckCircle, Clock, FileText, Edit, Ban, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { downloadInvoicePdf } from '@/lib/invoice';
-import { FACTURE_STATUTS, statusBadge, MODES_PAIEMENT, explainDbError } from '@/lib/format';
-import { supabase } from '@/lib/supabase';
+import { FACTURE_STATUTS, statusBadge, MODES_PAIEMENT, explainDbError, isNetworkError } from '@/lib/format';
+import { supabase, retrouverOperation } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useConfirm } from '@/context/ConfirmContext';
 import { buildPaymentReceiptPdf } from '@/lib/document-models';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
-import { roleLabels, canDeleteFacture } from '@/lib/role-permissions';
+import { roleLabels, canDeleteFacture, hasAccess } from '@/lib/role-permissions';
+import PriseEnChargeCard from '@/components/assurances/PriseEnChargeCard';
+import type { CreanceAssurance } from '@/lib/assurances';
 
 function formatMoneySafe(value: number | string): string {
   const cleaned = typeof value === 'string' ? value.replace(/[^\d,.-]/g, '').replace(',', '.') : value;
@@ -29,7 +31,8 @@ export default function FactureDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [facture, setFacture] = useState<any>(null);
-  
+  const [creance, setCreance] = useState<CreanceAssurance | null>(null);
+
   const [montantPaiement, setMontantPaiement] = useState('');
   const [modePaiement, setModePaiement] = useState('cash');
   const [referencePaiement, setReferencePaiement] = useState('');
@@ -39,7 +42,7 @@ export default function FactureDetailsPage() {
   }, [id]);
 
   // Mise à jour automatique quand un autre poste encaisse ou modifie la facture
-  useLiveRefresh(() => { if (!saving) fetchData(true); }, ["paiements", "factures", "lignes_facture"]);
+  useLiveRefresh(() => { if (!saving) fetchData(true); }, ["paiements", "factures", "lignes_facture", "paiements_assurance", "litiges_assurance"]);
 
   async function fetchData(silencieux = false) {
     if (!id) return;
@@ -67,6 +70,9 @@ export default function FactureDetailsPage() {
       });
       // Le montant saisi n'est remplacé que s'il dépasse le nouveau reste à payer
       setMontantPaiement((prev) => (!silencieux || prev === "" || Number(prev) > reste ? reste.toString() : prev));
+      // Situation de la part assurance (module Assurances : vue absente avant son installation)
+      const { data: c } = await supabase.from('v_creances_assurance').select('*').eq('facture_id', data.id).maybeSingle();
+      setCreance((c || null) as CreanceAssurance | null);
     }
     setLoading(false);
   }
@@ -95,7 +101,8 @@ export default function FactureDetailsPage() {
     if (!isConfirmed) return;
 
     setSaving(true);
-    
+    const debut = new Date(Date.now() - 60_000).toISOString();
+
     // Paiement + statut de la facture en une seule transaction, avec contrôle
     // du reste à payer côté base (deux encaissements simultanés ne peuvent pas dépasser le dû)
     const { data: res, error: pError } = await supabase.rpc('encaisser_paiement', {
@@ -104,6 +111,23 @@ export default function FactureDetailsPage() {
       p_mode: modePaiement,
       p_reference: referencePaiement.trim() || null,
     });
+
+    if (pError && isNetworkError(pError)) {
+      // Réponse perdue en route : le paiement a pu être enregistré, on le vérifie avant de proposer de recommencer
+      const { trouve, verifie } = await retrouverOperation<{ id: string }>(() => supabase.from('paiements').select('id')
+        .eq('facture_id', facture.id).eq('montant', montant).gte('date_paiement', debut).limit(1));
+      setSaving(false);
+      if (trouve) {
+        toast.success('Paiement bien enregistré (la confirmation du serveur s’était perdue).');
+        setReferencePaiement('');
+      } else if (verifie) {
+        toast.error('Connexion au serveur interrompue : le paiement n’a pas été enregistré. Vous pouvez recommencer.');
+      } else {
+        toast.error('Connexion toujours interrompue : impossible de vérifier le paiement. Actualisez la page (F5) avant de recommencer.', { duration: 8000 });
+      }
+      fetchData();
+      return;
+    }
 
     if (pError) {
       toast.error(explainDbError(pError));
@@ -347,7 +371,10 @@ export default function FactureDetailsPage() {
 
         {/* Colonne Droite : Paiements */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          
+          {Number(facture.montant_assurance) > 0 || creance ? (
+            <PriseEnChargeCard creance={creance} montant={Number(facture.montant_assurance)} lienModule={!!profile && hasAccess(profile.role, 'assurances')} />
+          ) : null}
+
           {/* Formulaire de paiement */}
           {resteAPayer > 0 && !isAnnulee && (
             <div className="card" style={{ border: '2px solid var(--primary-100)' }}>

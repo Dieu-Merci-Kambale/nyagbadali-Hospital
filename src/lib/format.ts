@@ -199,10 +199,25 @@ export function statusBadge(map: Record<string, StatusStyle>, statut?: string | 
   return map[statut || ''] || { label: capitalize(statut) || '—', badge: 'badge-neutral' };
 }
 
+/**
+ * Coupure réseau : la requête n'a pas reçu de réponse du serveur (« Failed to fetch »).
+ * L'opération a pu être enregistrée malgré tout : il faut vérifier avant de recommencer.
+ */
+export function isNetworkError(error: { message?: string } | null | undefined): boolean {
+  return /failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(error?.message || '');
+}
+
 /** Message d'erreur lisible, avec une aide si la migration SQL n'a pas été exécutée. */
 export function explainDbError(error: { message?: string; code?: string } | null | undefined): string {
   if (!error) return 'Erreur inconnue.';
   const msg = error.message || '';
+  if (isNetworkError(error)) {
+    return "Connexion au serveur interrompue : l'opération a peut-être été enregistrée. Actualisez la page (F5) et vérifiez avant de recommencer.";
+  }
+  // Tables, vues ou fonctions du module Assurances absentes : script du module non exécuté
+  if (/assur|bordereau|litige/i.test(msg) && (['42P01', '42703', 'PGRST200', 'PGRST202', 'PGRST204', 'PGRST205'].includes(error.code || '') || /does not exist|Could not find/i.test(msg))) {
+    return "Le module Assurances nécessite la mise à jour de la base de données. Exécutez le script supabase/migrations/20261021_assurances.sql dans Supabase.";
+  }
   // Fonction de base de données absente : script de sécurité non exécuté
   if (error.code === 'PGRST202' || /Could not find the function/i.test(msg)) {
     return "Cette opération nécessite la mise à jour de sécurité de la base. Exécutez le script supabase/migrations/20261010_securite_roles.sql dans Supabase.";

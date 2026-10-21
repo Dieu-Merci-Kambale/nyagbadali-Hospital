@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RolePersonnel } from '@/types';
 import {
-  canDeleteDepense, canDeleteFacture, canEditDepense, canManagePatients, canManageTarifs, canProcessLab, canRequestLab,
+  canCancelOperationAssurance, canDeleteDepense, canDeleteFacture, canEditDepense, canManageAssureurs, canManagePatients,
+  canManageTarifs, canProcessLab, canRequestLab,
   getDefaultRoute, hasAccess, hasRouteAccess, roleLabels,
 } from './role-permissions';
 
@@ -104,6 +105,28 @@ describe('canProcessLab', () => {
       expect(canProcessLab(role)).toBe(role === 'technicien_labo' || role === 'super_admin');
     }
     expect(canProcessLab(undefined)).toBe(false);
+  });
+});
+
+describe('module Assurances', () => {
+  it('est ouvert aux deux administrateurs et au caissier uniquement', () => {
+    for (const role of TOUS_LES_ROLES) {
+      const autorise = role === 'super_admin' || role === 'admin' || role === 'caissier';
+      expect(hasAccess(role, 'assurances')).toBe(autorise);
+      expect(hasRouteAccess(role, '/assurances/litiges')).toBe(autorise);
+    }
+  });
+
+  it("réserve l'ajout et la modification des assureurs à l'administration", () => {
+    for (const role of TOUS_LES_ROLES) {
+      expect(canManageAssureurs(role)).toBe(role === 'super_admin' || role === 'admin');
+    }
+    expect(canManageAssureurs(undefined)).toBe(false);
+  });
+
+  it("réserve l'annulation des règlements et bordereaux envoyés à l'administration", () => {
+    expect(canCancelOperationAssurance('admin')).toBe(true);
+    expect(canCancelOperationAssurance('caissier')).toBe(false);
   });
 });
 

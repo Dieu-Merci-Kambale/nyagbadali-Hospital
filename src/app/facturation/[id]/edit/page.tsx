@@ -10,6 +10,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import InvoiceLinesEditor, { InvoiceTotals } from '@/components/facturation/InvoiceLinesEditor';
 import { fetchActes, newLine, type InvoiceLine } from '@/lib/invoice';
 import { formatMoney, explainDbError } from '@/lib/format';
+import { calculPartAssurance, chargerCouverture, type CouverturePatient } from '@/lib/assurances';
 import type { ActeTarif } from '@/types';
 
 export default function EditFacturePage() {
@@ -24,6 +25,10 @@ export default function EditFacturePage() {
   const [actes, setActes] = useState<ActeTarif[]>([]);
   const [lignes, setLignes] = useState<InvoiceLine[]>([newLine()]);
   const [tauxAssurance, setTauxAssurance] = useState(0);
+  const [couverture, setCouverture] = useState<CouverturePatient | null>(null);
+  const [moduleAssurance, setModuleAssurance] = useState(false);
+  // Part assurance déjà réclamée, réglée ou en litige : elle ne se modifie plus ici
+  const [assuranceEngagee, setAssuranceEngagee] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -53,6 +58,13 @@ export default function EditFacturePage() {
         setLignes(existing.length ? existing : [newLine()]);
         const total = Number(data.montant_total) || 0;
         setTauxAssurance(total > 0 ? Math.round((Number(data.montant_assurance || 0) / total) * 100) : 0);
+        const [cv, engagee] = await Promise.all([
+          chargerCouverture(data.patient_id),
+          supabase.rpc('facture_assurance_engagee', { p_facture_id: data.id }),
+        ]);
+        setCouverture(cv.couverture);
+        setModuleAssurance(cv.module);
+        setAssuranceEngagee(engagee.data === true);
       }
       setLoading(false);
     }
@@ -61,7 +73,8 @@ export default function EditFacturePage() {
 
   const lignesValides = lignes.filter((l) => l.description.trim() !== '');
   const total = lignesValides.reduce((acc, l) => acc + l.quantite * l.prix_unitaire, 0);
-  const montantAssurance = Math.round((total * tauxAssurance) / 100);
+  const part = calculPartAssurance(total, tauxAssurance, couverture?.plafond);
+  const montantAssurance = part.montant;
   const montantPatient = total - montantAssurance;
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -86,6 +99,7 @@ export default function EditFacturePage() {
       montant_assurance: montantAssurance,
       montant_patient: montantPatient,
       statut: montantPatient === 0 ? 'payée' : 'en_attente',
+      ...(montantAssurance > 0 && couverture ? { assureur_id: couverture.id } : {}),
     }).eq('id', id);
     if (error) {
       setErrorMsg(explainDbError(error));
@@ -141,7 +155,9 @@ export default function EditFacturePage() {
     );
   }
 
-  const locked = (facture.paiements || []).length > 0 || facture.statut === 'annulée';
+  const locked = (facture.paiements || []).length > 0 || facture.statut === 'annulée' || assuranceEngagee;
+  // Avec le module Assurances, la part ne s'applique qu'à un assureur enregistré et utilisable
+  const tauxModifiable = !locked && (!moduleAssurance || !!couverture?.utilisable);
 
   return (
     <div className="animate-fade-in">
@@ -162,7 +178,9 @@ export default function EditFacturePage() {
           <Lock size={18} />
           {facture.statut === 'annulée'
             ? 'Cette facture est annulée et ne peut plus être modifiée.'
-            : 'Des paiements ont déjà été encaissés sur cette facture : elle ne peut plus être modifiée. Établissez une facture complémentaire si nécessaire.'}
+            : assuranceEngagee
+              ? 'La part assurance de cette facture est déjà réclamée, réglée ou en litige : la facture ne peut plus être modifiée. Une contestation de l’assureur se traite dans Assurances › Litiges.'
+              : 'Des paiements ont déjà été encaissés sur cette facture : elle ne peut plus être modifiée. Établissez une facture complémentaire si nécessaire.'}
           <Link href={`/facturation/${id}`} style={{ marginLeft: 'auto', fontWeight: 600 }}>Retour à la facture →</Link>
         </div>
       )}
@@ -184,9 +202,17 @@ export default function EditFacturePage() {
                 min="0"
                 max="100"
                 value={tauxAssurance}
-                disabled={locked}
+                disabled={!tauxModifiable}
                 onChange={(e) => setTauxAssurance(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
               />
+              {couverture && (
+                <p className="form-help">
+                  {couverture.nom} — couverture {couverture.taux} %{couverture.plafond ? `, plafond ${formatMoney(couverture.plafond)}` : ''}
+                  {!couverture.utilisable && ' (assureur désactivé ou contrat échu)'}
+                </p>
+              )}
+              {moduleAssurance && !couverture && <p className="form-help">Patient sans assureur enregistré : aucune prise en charge possible.</p>}
+              {part.plafonne && <p className="form-help" style={{ color: 'var(--warning-600, #b45309)' }}>Part assurance limitée au plafond par facture.</p>}
             </div>
           </div>
         </div>

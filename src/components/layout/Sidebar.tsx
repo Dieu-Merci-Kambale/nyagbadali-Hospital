@@ -26,6 +26,7 @@ import {
   ScrollText,
   FileSpreadsheet,
   Wallet,
+  ShieldCheck,
 } from 'lucide-react';
 
 // =====================================================
@@ -49,6 +50,7 @@ const allNavItems: NavItemConfig[] = [
   { module: 'chambres', label: 'Chambres & Lits', href: '/chambres', icon: <BedDouble size={20} />, section: 'Clinique' },
   { module: 'pharmacie', label: 'Pharmacie', href: '/pharmacie', icon: <Pill size={20} />, section: 'Support Médical' },
   { module: 'laboratoire', label: 'Laboratoire', href: '/laboratoire', icon: <FlaskConical size={20} />, section: 'Support Médical' },
+  { module: 'assurances', label: 'Assurances', href: '/assurances', icon: <ShieldCheck size={20} />, section: 'Administration' },
   { module: 'personnel', label: 'Personnel', href: '/personnel', icon: <UserCog size={20} />, section: 'Administration' },
   { module: 'departements', label: 'Départements', href: '/departements', icon: <Building2 size={20} />, section: 'Administration' },
   { module: 'facturation', label: 'Facturation', href: '/facturation', icon: <Receipt size={20} />, section: 'Administration' },

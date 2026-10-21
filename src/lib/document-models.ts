@@ -1886,3 +1886,196 @@ export async function buildFullInvoiceDocumentPdf(model: FullInvoiceDocumentMode
     printedAt,
   });
 }
+
+// =====================================================
+// Assurances : bordereau (facture adressée à l'assureur) et relevé de compte
+// =====================================================
+
+export type BordereauAssuranceDocumentModel = {
+  bordereau: any;
+  assureur: any;
+  /** Créances des factures du bordereau (vue v_creances_assurance) + montant réclamé */
+  lignes: any[];
+  printedBy?: PrintedBy;
+  printedAt?: string | Date;
+};
+
+export async function buildBordereauAssurancePdf(model: BordereauAssuranceDocumentModel) {
+  const { bordereau, assureur, lignes, printedBy, printedAt } = model;
+  const kit = await DocumentKit.create('landscape');
+  const { margin } = kit;
+  const total = lignes.reduce((s, l) => s + toNumber(l.montant_reclame ?? l.reste), 0);
+  const paye = lignes.reduce((s, l) => s + toNumber(l.paye), 0);
+  const periode = bordereau?.periode_debut || bordereau?.periode_fin
+    ? `Prestations du ${formatDate(bordereau.periode_debut)} au ${formatDate(bordereau.periode_fin)}`
+    : `${lignes.length} facture(s)`;
+
+  kit.letterhead({
+    title: 'BORDEREAU DE PRISE EN CHARGE',
+    meta: `N° ${bordereau?.numero || '—'}   •   Émis le ${formatDate(bordereau?.date_emission, 'long')}`,
+    service: 'Service de facturation & recouvrement',
+    right: { heading: assureur?.nom || 'Assureur', sub: assureur?.numero_contrat ? `Convention N° ${assureur.numero_contrat}` : undefined, caption: 'Destinataire' },
+    shortTitle: 'Bordereau assurance',
+    reference: `N° ${bordereau?.numero || ''}`,
+  });
+
+  kit.infoCard([
+    [
+      { label: 'Assureur', value: assureur?.nom || '—', w: 0.3 },
+      { label: 'Période', value: periode, w: 0.3 },
+      { label: 'Échéance de paiement', value: bordereau?.date_echeance ? formatDate(bordereau.date_echeance) : `${assureur?.delai_paiement_jours ?? 30} jours après réception`, w: 0.2 },
+      { label: 'Factures', value: String(lignes.length), w: 0.2 },
+    ],
+    [
+      { label: 'Contact', value: [assureur?.contact_nom, assureur?.telephone, assureur?.email].filter(Boolean).join('  •  ') || '—', w: 0.6 },
+      { label: 'Adresse', value: assureur?.adresse || '—', w: 0.4 },
+    ],
+  ]);
+
+  kit.section('Détail des prises en charge');
+  kit.table(
+    [
+      { header: 'N°', width: 4, align: 'center' },
+      { header: 'Date', width: 9 },
+      { header: 'Facture', width: 15 },
+      { header: 'Patient', width: 22 },
+      { header: 'N° assuré', width: 13 },
+      { header: 'Total facture', width: 12, align: 'right' },
+      { header: 'Part patient', width: 12, align: 'right' },
+      { header: 'Montant réclamé', width: 13, align: 'right' },
+    ],
+    lignes.map((l, i) => [
+      String(i + 1),
+      formatDate(l.date_facture),
+      l.numero_facture || '—',
+      `${fullName({ prenom: l.patient_prenom, nom: l.patient_nom })} (${l.code_patient || '—'})`,
+      l.numero_assurance || '—',
+      formatMoney(l.montant_total),
+      formatMoney(l.montant_patient),
+      formatMoney(l.montant_reclame ?? l.reste),
+    ]),
+    { emptyText: 'Aucune facture sur ce bordereau.', fontSize: 8.2, totalRow: ['', '', '', 'TOTAL', '', '', '', formatMoney(total)] }
+  );
+
+  const totalsTop = kit.y;
+  const totalsEnd = kit.totals([
+    { label: 'Montant réclamé', value: formatMoney(total), emphasis: true },
+    ...(paye > 0 ? [{ label: 'Déjà réglé', value: formatMoney(paye), tone: SUCCESS }, { label: 'Reste à régler', value: formatMoney(Math.max(total - paye, 0)) }] : []),
+  ]);
+  kit.color(MUTED).font('bold', 6.8);
+  kit.doc.text('ARRÊTÉ LE PRÉSENT BORDEREAU À LA SOMME DE', margin, totalsTop, { charSpace: 0.3 });
+  kit.color(INK).font('italic', 9);
+  kit.doc.text(kit.wrap(`${amountInWords(total)}.`, 120), margin, totalsTop + 5);
+  if (bordereau?.statut === 'annulé') kit.stamp('ANNULÉ', DANGER, margin + 40, totalsTop + 22);
+  else if (paye > 0 && paye >= total) kit.stamp('RÉGLÉ', SUCCESS, margin + 40, totalsTop + 22);
+  kit.y = Math.max(totalsEnd, totalsTop + 30) + 6;
+
+  kit.signatures([
+    { title: 'Le responsable de la facturation', name: [printedBy?.prenom, printedBy?.nom].filter(Boolean).join(' ') || undefined },
+    { title: "Accusé de réception de l'assureur" },
+  ], {
+    leftNote: ['Merci de rappeler le numéro du bordereau lors du règlement.', `Bordereau N° ${bordereau?.numero || ''}`],
+  });
+
+  return kit.finish({
+    notice: 'Les pièces justificatives (factures, ordonnances, prises en charge) sont tenues à la disposition de l’assureur',
+    printedBy,
+    printedAt,
+  });
+}
+
+export type ReleveAssureurDocumentModel = {
+  assureur: any;
+  /** Créances encore dues (vue v_creances_assurance) */
+  creances: any[];
+  /** Règlements validés */
+  reglements: any[];
+  printedBy?: PrintedBy;
+  printedAt?: string | Date;
+};
+
+export async function buildReleveAssureurPdf(model: ReleveAssureurDocumentModel) {
+  const { assureur, creances, reglements, printedBy, printedAt } = model;
+  const kit = await DocumentKit.create('landscape');
+  const du = creances.reduce((s, c) => s + toNumber(c.reste), 0);
+  const conteste = creances.reduce((s, c) => s + toNumber(c.montant_conteste), 0);
+  const retard = creances.filter((c) => c.en_retard).reduce((s, c) => s + toNumber(c.reste), 0);
+  const recu = reglements.reduce((s, r) => s + toNumber(r.montant), 0);
+  const totalPart = creances.reduce((s, c) => s + toNumber(c.montant_assurance), 0);
+  const totalRegle = creances.reduce((s, c) => s + toNumber(c.paye), 0);
+  const date = printedAt ? new Date(printedAt) : new Date();
+
+  kit.letterhead({
+    title: 'RELEVÉ DE COMPTE ASSUREUR',
+    meta: `Situation au ${formatDate(date, 'long')}`,
+    service: 'Service de facturation & recouvrement',
+    right: { heading: assureur?.nom || 'Assureur', sub: assureur?.numero_contrat ? `Convention N° ${assureur.numero_contrat}` : undefined, caption: 'Destinataire' },
+    shortTitle: 'Relevé assureur',
+    reference: assureur?.nom || '',
+  });
+
+  kit.tiles([
+    { label: 'Reste dû', value: formatMoney(du) },
+    { label: 'Dont échéance dépassée', value: formatMoney(retard) },
+    { label: 'Montants contestés', value: formatMoney(conteste) },
+    { label: 'Règlements reçus', value: formatMoney(recu) },
+  ]);
+
+  kit.section(`Factures restant dues (${creances.length})`);
+  kit.table(
+    [
+      { header: 'Date', width: 9 },
+      { header: 'Facture', width: 14 },
+      { header: 'Patient', width: 20 },
+      { header: 'Bordereau', width: 13 },
+      { header: 'Échéance', width: 9 },
+      { header: 'Part assurance', width: 11, align: 'right' },
+      { header: 'Réglé', width: 11, align: 'right' },
+      { header: 'Reste dû', width: 11, align: 'right' },
+    ],
+    creances.map((c) => [
+      formatDate(c.date_facture),
+      c.numero_facture || '—',
+      fullName({ prenom: c.patient_prenom, nom: c.patient_nom }),
+      c.bordereau_numero || 'Non réclamée',
+      c.date_echeance ? formatDate(c.date_echeance) : '—',
+      formatMoney(c.montant_assurance),
+      formatMoney(c.paye),
+      formatMoney(c.reste),
+    ]),
+    {
+      emptyText: 'Aucune facture restant due.',
+      fontSize: 8.2,
+      dangerRows: creances.map((c, i) => (c.en_retard ? i : -1)).filter((i) => i >= 0),
+      totalRow: ['TOTAL', '', '', '', '', formatMoney(totalPart), formatMoney(totalRegle), formatMoney(du)],
+    }
+  );
+
+  if (reglements.length) {
+    kit.section(`Règlements reçus (${reglements.length})`);
+    kit.table(
+      [
+        { header: 'Date', width: 14 },
+        { header: 'N° règlement', width: 16 },
+        { header: 'Mode', width: 14 },
+        { header: 'Référence', width: 22 },
+        { header: 'Montant', width: 14, align: 'right' },
+      ],
+      reglements.map((r) => [formatDate(r.date_paiement), r.numero || '—', modePaiementLabel(r.mode_paiement), r.reference || '—', formatMoney(r.montant)]),
+      { fontSize: 8.2, totalRow: ['TOTAL', '', '', '', formatMoney(recu)] }
+    );
+  }
+
+  kit.signatures([
+    { title: 'Le responsable financier', name: [printedBy?.prenom, printedBy?.nom].filter(Boolean).join(' ') || undefined },
+    { title: "Visa de l'assureur" },
+  ], {
+    leftNote: [`Reste dû au ${formatDate(date)} : ${formatMoney(du)}`, 'Lignes en rouge : échéance de paiement dépassée.'],
+  });
+
+  return kit.finish({
+    notice: 'Relevé établi à partir des factures, bordereaux et règlements enregistrés à la date d’édition',
+    printedBy,
+    printedAt,
+  });
+}

@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { MODES_PAIEMENT, CATEGORIES_ACTES, FACTURE_STATUTS } from '@/lib/format';
 import type { ReportDefinition } from './types';
 import { fetchAll, iso, nom, sum, ratio, periodBuckets, groupBy, daysBetween } from './helpers';
+import { fetchReglementsAssurance } from './assurances';
 
 const FINANCE_ROLES: ReportDefinition['roles'] = ['super_admin', 'admin', 'caissier'];
 const mode = (m?: string) => MODES_PAIEMENT[m || ''] || m || '—';
@@ -28,7 +29,7 @@ export const FINANCE_REPORTS: ReportDefinition[] = [
     id: 'releve-caisse',
     category: 'finances',
     title: 'Relevé de caisse',
-    description: 'Journal détaillé des encaissements : chaque paiement, totaux par mode de paiement et par caissier.',
+    description: 'Journal détaillé des encaissements : chaque paiement des patients et règlement des assureurs, totaux par mode de paiement et par caissier.',
     roles: FINANCE_ROLES,
     period: 'periode',
     defaultMode: 'jour',
@@ -36,22 +37,33 @@ export const FINANCE_REPORTS: ReportDefinition[] = [
     signatures: ['Le caissier', 'Le responsable financier'],
     run: async ({ period }) => {
       const p = period!;
-      const paiements = await fetchAll((a, b) => supabase
-        .from('paiements')
-        .select('montant, mode_paiement, reference, date_paiement, caissier:personnel!paiements_recu_par_fkey(nom, prenom), factures(numero_facture, patients(nom, prenom, code_patient))')
-        .gte('date_paiement', iso(p.from)).lte('date_paiement', iso(p.to))
-        .order('date_paiement').range(a, b));
+      const [paiements, reglements] = await Promise.all([
+        fetchAll((a, b) => supabase
+          .from('paiements')
+          .select('montant, mode_paiement, reference, date_paiement, caissier:personnel!paiements_recu_par_fkey(nom, prenom), factures(numero_facture, patients(nom, prenom, code_patient))')
+          .gte('date_paiement', iso(p.from)).lte('date_paiement', iso(p.to))
+          .order('date_paiement').range(a, b)),
+        // Règlements des assureurs : comptabilisés dans les encaissements
+        fetchReglementsAssurance(p.from, p.to),
+      ]);
 
-      const total = sum(paiements, (x: any) => x.montant);
-      const parMode = Array.from(groupBy(paiements, (x: any) => mode(x.mode_paiement)), ([k, v]) => [k, v.length, sum(v, (x: any) => x.montant), ratio(sum(v, (x: any) => x.montant), total)]);
-      const parCaissier = Array.from(groupBy(paiements, (x: any) => (x.caissier ? nom(x.caissier) : 'Non renseigné')), ([k, v]) => [k, v.length, sum(v, (x: any) => x.montant)]);
-      const especes = sum(paiements.filter((x: any) => x.mode_paiement === 'cash'), (x: any) => x.montant);
+      const totalPatients = sum(paiements, (x: any) => x.montant);
+      const totalAssurances = sum(reglements, (x: any) => x.montant);
+      const total = totalPatients + totalAssurances;
+      const operations = [...paiements, ...reglements];
+      const parMode = Array.from(groupBy(operations, (x: any) => mode(x.mode_paiement)), ([k, v]) => [k, v.length, sum(v, (x: any) => x.montant), ratio(sum(v, (x: any) => x.montant), total)]);
+      const parCaissier = Array.from(groupBy(operations, (x: any) => {
+        const agent = x.caissier || x.recu;
+        return agent ? nom(agent) : 'Non renseigné';
+      }), ([k, v]) => [k, v.length, sum(v, (x: any) => x.montant)]);
+      const especes = sum(operations.filter((x: any) => x.mode_paiement === 'cash'), (x: any) => x.montant);
 
       return {
         kpis: [
           { label: 'Total encaissé', value: total, type: 'money' },
-          { label: "Nombre d'opérations", value: paiements.length, type: 'number' },
-          { label: 'Montant moyen', value: ratio(total, paiements.length), type: 'money' },
+          { label: 'Dont règlements des assureurs', value: totalAssurances, type: 'money', hint: `${reglements.length} règlement(s)` },
+          { label: "Nombre d'opérations", value: operations.length, type: 'number' },
+          { label: 'Montant moyen', value: ratio(total, operations.length), type: 'money' },
           { label: 'Espèces à justifier', value: especes, type: 'money', hint: 'Montant attendu en caisse' },
         ],
         sections: [
@@ -67,20 +79,34 @@ export const FINANCE_REPORTS: ReportDefinition[] = [
               { header: 'Montant', type: 'money', width: 13 },
             ],
             rows: paiements.map((x: any) => [x.date_paiement, x.factures?.numero_facture, `${nom(x.factures?.patients)} (${x.factures?.patients?.code_patient || '—'})`, mode(x.mode_paiement), x.reference, nom(x.caissier), Number(x.montant)]),
-            totals: ['TOTAL', '', `${paiements.length} opération(s)`, '', '', '', total],
+            totals: ['TOTAL', '', `${paiements.length} opération(s)`, '', '', '', totalPatients],
             emptyText: 'Aucun encaissement sur la période.',
           },
+          ...(reglements.length ? [{
+            title: 'Règlements des assureurs',
+            columns: [
+              { header: 'Date & heure', type: 'datetime' as const, width: 15 },
+              { header: 'N° règlement', width: 15 },
+              { header: 'Assureur', width: 22 },
+              { header: 'Mode', width: 12 },
+              { header: 'Référence', width: 12 },
+              { header: 'Enregistré par', width: 14 },
+              { header: 'Montant', type: 'money' as const, width: 13 },
+            ],
+            rows: reglements.map((x: any) => [x.date_paiement, x.numero, x.assureurs?.nom, mode(x.mode_paiement), x.reference, nom(x.recu), Number(x.montant)]),
+            totals: ['TOTAL', '', `${reglements.length} règlement(s)`, '', '', '', totalAssurances],
+          }] : []),
           {
             title: 'Récapitulatif par mode de paiement',
             columns: [{ header: 'Mode de paiement', width: 40 }, { header: 'Opérations', type: 'number', width: 20 }, { header: 'Montant', type: 'money', width: 25 }, { header: 'Part', type: 'percent', width: 15 }],
             rows: parMode,
-            totals: ['TOTAL', paiements.length, total, total ? 1 : 0],
+            totals: ['TOTAL', operations.length, total, total ? 1 : 0],
           },
           {
             title: 'Récapitulatif par caissier',
             columns: [{ header: 'Caissier', width: 50 }, { header: 'Opérations', type: 'number', width: 20 }, { header: 'Montant', type: 'money', width: 30 }],
             rows: parCaissier,
-            totals: ['TOTAL', paiements.length, total],
+            totals: ['TOTAL', operations.length, total],
           },
         ],
       };
@@ -100,7 +126,7 @@ export const FINANCE_REPORTS: ReportDefinition[] = [
     signatures: ['Le responsable financier', 'La direction'],
     run: async ({ period }) => {
       const p = period!;
-      const [factures, paiements, lignes, actes] = await Promise.all([
+      const [factures, paiementsPatients, lignes, actes, reglementsAssurance] = await Promise.all([
         fetchAll((a, b) => supabase.from('factures').select('id, date_facture, montant_total, montant_assurance, montant_patient, statut, paiements(montant)')
           .gte('date_facture', iso(p.from)).lte('date_facture', iso(p.to)).range(a, b)),
         fetchAll((a, b) => supabase.from('paiements').select('montant, mode_paiement, date_paiement')
@@ -108,7 +134,10 @@ export const FINANCE_REPORTS: ReportDefinition[] = [
         fetchAll((a, b) => supabase.from('lignes_facture').select('montant, code_acte, source_type, factures!inner(date_facture, statut)')
           .gte('factures.date_facture', iso(p.from)).lte('factures.date_facture', iso(p.to)).neq('factures.statut', 'annulée').range(a, b)),
         catalogue(),
+        fetchReglementsAssurance(p.from, p.to),
       ]);
+      // Encaissements : paiements des patients et règlements des assureurs
+      const paiements = [...paiementsPatients, ...reglementsAssurance];
 
       const valides = factures.filter((f: any) => f.statut !== 'annulée');
       const brut = sum(valides, (f: any) => f.montant_total);
@@ -116,6 +145,7 @@ export const FINANCE_REPORTS: ReportDefinition[] = [
       const net = sum(valides, (f: any) => f.montant_patient);
       const payeSurFactures = sum(valides, (f: any) => sum(f.paiements || [], (x: any) => x.montant));
       const encaisse = sum(paiements, (x: any) => x.montant);
+      const encaisseAssurances = sum(reglementsAssurance, (x: any) => x.montant);
       const reste = net - payeSurFactures;
 
       const buckets = periodBuckets(p);
@@ -139,7 +169,7 @@ export const FINANCE_REPORTS: ReportDefinition[] = [
           { label: 'Facturé (brut)', value: brut, type: 'money', hint: `${valides.length} facture(s)` },
           { label: 'Part assurances', value: assurance, type: 'money' },
           { label: 'Net à charge des patients', value: net, type: 'money' },
-          { label: 'Encaissé sur la période', value: encaisse, type: 'money' },
+          { label: 'Encaissé sur la période', value: encaisse, type: 'money', hint: encaisseAssurances > 0 ? `dont ${Math.round(encaisseAssurances).toLocaleString('fr-FR')} FC des assureurs` : undefined },
           { label: 'Reste à recouvrer', value: reste, type: 'money', hint: 'Sur les factures de la période' },
           { label: 'Taux de recouvrement', value: ratio(payeSurFactures, net), type: 'percent' },
         ],

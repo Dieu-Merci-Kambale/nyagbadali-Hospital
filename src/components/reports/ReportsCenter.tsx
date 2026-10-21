@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Banknote, Users, BedDouble, Stethoscope, Pill, FlaskConical, Building2, FileText, FileSpreadsheet, Printer,
-  Loader2, Play, AlertTriangle, ChevronRight, CalendarDays, Filter, Inbox, ArrowLeft,
+  Loader2, Play, AlertTriangle, ChevronRight, CalendarDays, Filter, Inbox, ArrowLeft, ShieldCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
@@ -17,6 +17,7 @@ import { downloadReportPdf, downloadReportExcel, printReport } from '@/lib/repor
 
 const ICONS: Record<ReportCategory, React.ReactNode> = {
   finances: <Banknote size={18} />,
+  assurances: <ShieldCheck size={18} />,
   patients: <Users size={18} />,
   hospitalisation: <BedDouble size={18} />,
   medical: <Stethoscope size={18} />,

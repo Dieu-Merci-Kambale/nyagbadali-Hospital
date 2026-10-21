@@ -15,6 +15,7 @@ export type AppModule =
   | 'personnel'
   | 'facturation'
   | 'depenses'
+  | 'assurances'
   | 'departements'
   | 'rapports'
   | 'statistiques'
@@ -34,6 +35,7 @@ export const moduleRoutes: Record<AppModule, string> = {
   'personnel': '/personnel',
   'facturation': '/facturation',
   'depenses': '/depenses',
+  'assurances': '/assurances',
   'departements': '/departements',
   'rapports': '/rapports',
   'statistiques': '/statistiques',
@@ -51,12 +53,12 @@ export const moduleRoutes: Record<AppModule, string> = {
 const rolePermissions: Record<RolePersonnel, AppModule[]> = {
   super_admin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'pharmacie', 'laboratoire', 'personnel', 'facturation', 'depenses',
+    'chambres', 'pharmacie', 'laboratoire', 'assurances', 'personnel', 'facturation', 'depenses',
     'departements', 'rapports', 'statistiques', 'audit', 'profil',
   ],
   admin: [
     'dashboard', 'patients', 'rendez-vous', 'pharmacie', 'chambres', 'laboratoire',
-    'personnel', 'facturation', 'depenses', 'departements', 'rapports', 'statistiques', 'audit', 'profil',
+    'assurances', 'personnel', 'facturation', 'depenses', 'departements', 'rapports', 'statistiques', 'audit', 'profil',
   ],
   medecin_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
@@ -81,7 +83,7 @@ const rolePermissions: Record<RolePersonnel, AppModule[]> = {
     'dashboard', 'pharmacie', 'profil',
   ],
   caissier: [
-    'dashboard', 'facturation', 'depenses', 'profil',
+    'dashboard', 'facturation', 'depenses', 'assurances', 'profil',
   ],
   receptionniste: [
     'dashboard', 'patients', 'rendez-vous', 'profil',
@@ -111,6 +113,16 @@ const LAB_REQUESTERS: RolePersonnel[] = ['super_admin', 'medecin_chef', 'medecin
 
 export function canRequestLab(role?: RolePersonnel | null): boolean {
   return !!role && LAB_REQUESTERS.includes(role);
+}
+
+/** Seuls les administrateurs enregistrent et modifient les assureurs (le caissier gère les factures, règlements et litiges). */
+export function canManageAssureurs(role?: RolePersonnel | null): boolean {
+  return role === 'super_admin' || role === 'admin';
+}
+
+/** Annulation d'un règlement d'assureur ou d'un bordereau déjà envoyé : administration uniquement. */
+export function canCancelOperationAssurance(role?: RolePersonnel | null): boolean {
+  return role === 'super_admin' || role === 'admin';
 }
 
 /** Seuls les administrateurs enregistrent les actes et examens du catalogue et fixent leurs prix. */

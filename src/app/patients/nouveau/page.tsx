@@ -10,6 +10,7 @@ import AdminGuard from '@/components/AdminGuard';
 import { canManagePatients } from '@/lib/role-permissions';
 import type { RolePersonnel } from '@/types';
 import { ETATS_CIVILS } from '@/lib/format';
+import AssureurSelect from '@/components/assurances/AssureurSelect';
 
 export default function NouveauPatientPage() {
   return (
@@ -29,6 +30,8 @@ function NouveauPatientForm() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  // Assureur enregistré par l'administration (seuls ceux-ci sont proposés)
+  const [assureurId, setAssureurId] = useState('');
   const { confirm } = useConfirm();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -59,8 +62,7 @@ function NouveauPatientForm() {
         telephone: (formData.get('telephone') as string) || null,
         email: (formData.get('email') as string) || null,
         adresse: (formData.get('adresse') as string) || null,
-        assureur: (formData.get('assureur') as string) || null,
-        numero_assurance: (formData.get('numero_assurance') as string) || null,
+        numero_assurance: assureurId ? ((formData.get('numero_assurance') as string) || null) : null,
         contact_urgence_nom: (formData.get('contact_urgence_nom') as string) || null,
         contact_urgence_tel: (formData.get('contact_urgence_tel') as string) || null,
         statut: 'actif'
@@ -77,6 +79,8 @@ function NouveauPatientForm() {
       const etatCivil = (formData.get('etat_civil') as string) || '';
       if (profession) data.profession = profession;
       if (etatCivil) data.etat_civil = etatCivil;
+      // Le nom de l'assureur est repris automatiquement par la base
+      if (assureurId) data.assureur_id = assureurId;
 
       const { data: created, error } = await supabase.from('patients').insert([data]).select('id').single();
 
@@ -215,19 +219,12 @@ function NouveauPatientForm() {
           <div className="card-body">
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label" htmlFor="assureur">Assureur</label>
-                <select className="form-select" name="assureur" id="assureur">
-                  <option value="">Pas d&apos;assurance</option>
-                  <option value="SONAS">SONAS</option>
-                  <option value="Rawsur">Rawsur</option>
-                  <option value="Activa">Activa</option>
-                  <option value="SANLAM">SANLAM</option>
-                  <option value="Autre">Autre</option>
-                </select>
+                <label className="form-label" htmlFor="assureur_id">Assureur</label>
+                <AssureurSelect value={assureurId} onChange={(id) => setAssureurId(id)} />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="numero_assurance">Numéro de Police</label>
-                <input type="text" name="numero_assurance" className="form-input" id="numero_assurance" placeholder="ASS-XXXXXX" />
+                <input type="text" name="numero_assurance" className="form-input" id="numero_assurance" placeholder="ASS-XXXXXX" disabled={!assureurId} />
               </div>
             </div>
           </div>

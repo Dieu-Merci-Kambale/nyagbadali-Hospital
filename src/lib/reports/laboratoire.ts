@@ -245,7 +245,9 @@ export const ADMIN_REPORTS: ReportDefinition[] = [
         consultations: 'Consultations', prescriptions: 'Prescriptions', medicaments: 'Pharmacie (stock)',
         hospitalisations: 'Hospitalisation', lits: 'Lits', chambres: 'Chambres', factures: 'Factures',
         lignes_facture: 'Lignes de facture', paiements: 'Paiements', analyses_laboratoire: 'Laboratoire',
-        demandes_laboratoire: "Demandes d'examens", actes_tarifs: 'Tarifs',
+        demandes_laboratoire: "Demandes d'examens", actes_tarifs: 'Tarifs', depenses: 'Dépenses',
+        assureurs: 'Assureurs', bordereaux_assurance: 'Bordereaux assurance', bordereau_factures: 'Factures des bordereaux',
+        paiements_assurance: 'Règlements des assureurs', paiements_assurance_factures: 'Ventilation des règlements', litiges_assurance: 'Litiges assurance',
       };
       const parEmail = new Map(personnel.map((x: any) => [String(x.email).toLowerCase(), x]));
       const qui = (email?: string | null) => {

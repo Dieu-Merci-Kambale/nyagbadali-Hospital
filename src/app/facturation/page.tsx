@@ -55,17 +55,28 @@ export default function FacturationPage() {
   const [appliedStartDate, setAppliedStartDate] = useState('');
   const [appliedEndDate, setAppliedEndDate] = useState('');
 
+  // Règlements reçus des assureurs et parts assurance restant dues (module Assurances)
+  const [encaisseAssurances, setEncaisseAssurances] = useState(0);
+  const [duAssurances, setDuAssurances] = useState(0);
+
   const [reloadKey, setReloadKey] = useState(0);
   // Mise à jour automatique (paiements et factures saisis sur d'autres postes)
-  useLiveRefresh(() => setReloadKey((k) => k + 1), ['factures', 'paiements']);
+  useLiveRefresh(() => setReloadKey((k) => k + 1), ['factures', 'paiements', 'paiements_assurance']);
 
   useEffect(() => {
     async function fetchFactures() {
       if (reloadKey === 0) setLoading(true);
-      const { data, error } = await supabase
-        .from('factures')
-        .select('*, patients(nom, prenom, code_patient), paiements(montant)')
-        .order('date_facture', { ascending: false });
+      const [{ data, error }, reglements, creances] = await Promise.all([
+        supabase
+          .from('factures')
+          .select('*, patients(nom, prenom, code_patient), paiements(montant)')
+          .order('date_facture', { ascending: false }),
+        // Listes vides tant que le script du module Assurances n'est pas exécuté
+        supabase.from('paiements_assurance').select('montant').eq('statut', 'validé'),
+        supabase.from('v_creances_assurance').select('reste').gt('reste', 0),
+      ]);
+      setEncaisseAssurances((reglements.data || []).reduce((s: number, r: { montant: number }) => s + Number(r.montant || 0), 0));
+      setDuAssurances((creances.data || []).reduce((s: number, c: { reste: number }) => s + Number(c.reste || 0), 0));
 
       if (error) {
         console.error('Erreur:', error);
@@ -143,10 +154,13 @@ export default function FacturationPage() {
     setAppliedEndDate(endDate);
   };
 
-  const revenuTotal = factures.filter(f => f.statut === 'payée' || f.statut === 'partielle').reduce((acc, f) => acc + (f.montant_paye || 0), 0);
-  const enAttente = factures
+  // Encaissé = paiements des patients + règlements des assureurs
+  const encaissePatients = factures.filter(f => f.statut === 'payée' || f.statut === 'partielle').reduce((acc, f) => acc + (f.montant_paye || 0), 0);
+  const revenuTotal = encaissePatients + encaisseAssurances;
+  const enAttentePatients = factures
     .filter(f => f.statut !== 'payée' && f.statut !== 'annulée')
     .reduce((acc, f) => acc + (f.montant_patient - (f.montant_paye || 0)), 0);
+  const enAttente = enAttentePatients + duAssurances;
   
   if (loading) {
     return (
@@ -184,6 +198,9 @@ export default function FacturationPage() {
           <div className="stat-card-info">
             <h3>Revenus Encaissés</h3>
             <div className="stat-value">{formatCDF(revenuTotal)}</div>
+            {encaisseAssurances > 0 && (
+              <div className="stat-change positive">Patients {formatCDF(encaissePatients)} • Assureurs {formatCDF(encaisseAssurances)}</div>
+            )}
           </div>
         </div>
         <div className="stat-card">
@@ -191,6 +208,9 @@ export default function FacturationPage() {
           <div className="stat-card-info">
             <h3>Paiements en attente</h3>
             <div className="stat-value">{formatCDF(enAttente)}</div>
+            {duAssurances > 0 && (
+              <div className="stat-change">Patients {formatCDF(enAttentePatients)} • Assureurs {formatCDF(duAssurances)}</div>
+            )}
           </div>
         </div>
         <div className="stat-card">

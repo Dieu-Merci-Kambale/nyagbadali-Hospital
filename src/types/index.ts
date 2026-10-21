@@ -14,7 +14,9 @@ export interface Patient {
   email?: string;
   photo_url?: string;
   numero_assurance?: string;
-  assureur?: string;
+  assureur?: string | null;
+  /** Assureur enregistré (module Assurances) ; `assureur` en reprend le nom */
+  assureur_id?: string | null;
   contact_urgence_nom?: string;
   contact_urgence_tel?: string;
   allergies?: string | null;

@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { MODES_PAIEMENT, CATEGORIES_DEPENSES } from '@/lib/format';
 import type { ReportDefinition } from './types';
 import { fetchAll, iso, nom, sum, ratio, periodBuckets, groupBy } from './helpers';
+import { fetchReglementsAssurance } from './assurances';
 
 // Mêmes rôles que le module Dépenses (src/lib/role-permissions.ts)
 const DEPENSE_ROLES: ReportDefinition['roles'] = ['super_admin', 'admin', 'caissier'];
@@ -103,7 +104,7 @@ export const DEPENSE_REPORTS: ReportDefinition[] = [
     id: 'situation-caisse',
     category: 'finances',
     title: 'Situation de caisse (entrées / sorties)',
-    description: 'Encaissements des patients, dépenses de l’hôpital et solde de caisse, avec l’évolution, le solde cumulé et le détail par mode de paiement.',
+    description: 'Encaissements des patients et des assureurs, dépenses de l’hôpital et solde de caisse, avec l’évolution, le solde cumulé et le détail par mode de paiement.',
     roles: DEPENSE_ROLES,
     period: 'periode',
     defaultMode: 'mois',
@@ -111,13 +112,17 @@ export const DEPENSE_REPORTS: ReportDefinition[] = [
     signatures: ['Le caissier', 'Le responsable financier', 'La direction'],
     run: async ({ period }) => {
       const p = period!;
-      const [paiements, toutes] = await Promise.all([
+      const [paiementsPatients, toutes, reglementsAssurance] = await Promise.all([
         fetchAll((a, b) => supabase.from('paiements').select('montant, mode_paiement, date_paiement')
           .gte('date_paiement', iso(p.from)).lte('date_paiement', iso(p.to)).range(a, b)),
         fetchDepenses(p.from, p.to),
+        fetchReglementsAssurance(p.from, p.to),
       ]);
+      // Entrées : paiements des patients et règlements des assureurs
+      const paiements = [...paiementsPatients, ...reglementsAssurance];
       const depenses = toutes.filter((d: any) => d.statut !== 'annulée');
       const entrees = sum(paiements, (x: any) => x.montant);
+      const entreesAssurances = sum(reglementsAssurance, (x: any) => x.montant);
       const sorties = sum(depenses, (d: any) => d.montant);
       const especesEntrees = sum(paiements.filter((x: any) => x.mode_paiement === 'cash'), (x: any) => x.montant);
       const especesSorties = sum(depenses.filter((d: any) => d.mode_paiement === 'cash'), (d: any) => d.montant);
@@ -146,7 +151,7 @@ export const DEPENSE_REPORTS: ReportDefinition[] = [
 
       return {
         kpis: [
-          { label: 'Entrées (encaissements)', value: entrees, type: 'money', hint: `${paiements.length} paiement(s)` },
+          { label: 'Entrées (encaissements)', value: entrees, type: 'money', hint: entreesAssurances > 0 ? `dont ${Math.round(entreesAssurances).toLocaleString('fr-FR')} FC des assureurs` : `${paiements.length} paiement(s)` },
           { label: 'Sorties (dépenses)', value: sorties, type: 'money', hint: `${depenses.length} dépense(s)` },
           { label: 'Solde de caisse', value: solde, type: 'money', hint: solde < 0 ? 'Déficit : dépenses supérieures aux entrées' : 'Entrées − sorties' },
           { label: 'Solde en espèces', value: especesEntrees - especesSorties, type: 'money', hint: 'Montant attendu en caisse physique' },

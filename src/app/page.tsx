@@ -101,6 +101,7 @@ export default function DashboardPage() {
         medsRes,
         hospRes,
         depensesRes,
+        reglementsAssuranceRes,
       ] = await Promise.all([
         supabase.from('patients').select('*', { count: 'exact', head: true }),
         supabase.from('patients').select('*', { count: 'exact', head: true }).gte('created_at', debutJour),
@@ -123,9 +124,13 @@ export default function DashboardPage() {
         hasAccess(profile!.role, 'depenses')
           ? supabase.from('depenses').select('montant, statut').gte('date_depense', debutMois)
           : Promise.resolve({ data: [] as any[] }),
+        // Règlements des assureurs : comptabilisés dans les encaissements
+        hasAccess(profile!.role, 'assurances')
+          ? supabase.from('paiements_assurance').select('montant, date_paiement').eq('statut', 'validé').gte('date_paiement', debut7j < debutMois ? debut7j : debutMois)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
 
-      const paiements = paiementsQuery.data ?? [];
+      const paiements = [...(paiementsQuery.data ?? []), ...(reglementsAssuranceRes.data ?? [])];
       const revenuMensuel = paiements
         .filter((p) => new Date(p.date_paiement).getTime() >= new Date(debutMois).getTime())
         .reduce((sum, p) => sum + (Number(p.montant) || 0), 0);
