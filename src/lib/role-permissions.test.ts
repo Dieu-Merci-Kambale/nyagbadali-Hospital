@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RolePersonnel } from '@/types';
 import {
-  canDeleteFacture, canManagePatients, canProcessLab, getDefaultRoute, hasAccess, hasRouteAccess, roleLabels,
+  canDeleteDepense, canDeleteFacture, canEditDepense, canManagePatients, canProcessLab, getDefaultRoute, hasAccess, hasRouteAccess, roleLabels,
 } from './role-permissions';
 
 const TOUS_LES_ROLES = Object.keys(roleLabels) as RolePersonnel[];
@@ -34,6 +34,30 @@ describe('hasAccess', () => {
 
   it('laisse le profil accessible à tous', () => {
     for (const role of TOUS_LES_ROLES) expect(hasAccess(role, 'profil')).toBe(true);
+  });
+});
+
+describe('module Dépenses', () => {
+  it('est réservé au caissier et aux deux administrateurs', () => {
+    for (const role of TOUS_LES_ROLES) {
+      const autorise = role === 'super_admin' || role === 'admin' || role === 'caissier';
+      expect(hasAccess(role, 'depenses')).toBe(autorise);
+      expect(hasRouteAccess(role, '/depenses/rapports')).toBe(autorise);
+    }
+  });
+
+  it("laisse la modification et l'annulation à l'administration seulement", () => {
+    expect(canEditDepense('admin', { statut: 'validée' })).toBe(true);
+    expect(canEditDepense('super_admin', { statut: 'validée' })).toBe(true);
+    expect(canEditDepense('caissier', { statut: 'validée' })).toBe(false);
+    expect(canEditDepense('admin', { statut: 'annulée' })).toBe(false);
+  });
+
+  it("ne supprime qu'une dépense annulée, par un administrateur", () => {
+    expect(canDeleteDepense('admin', { statut: 'annulée' })).toBe(true);
+    expect(canDeleteDepense('admin', { statut: 'validée' })).toBe(false);
+    expect(canDeleteDepense('caissier', { statut: 'annulée' })).toBe(false);
+    expect(canDeleteDepense(null, { statut: 'annulée' })).toBe(false);
   });
 });
 

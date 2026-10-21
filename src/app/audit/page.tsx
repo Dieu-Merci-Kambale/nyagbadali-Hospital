@@ -22,6 +22,7 @@ const TABLES: Record<string, string> = {
   factures: 'Factures',
   lignes_facture: 'Lignes de facture',
   paiements: 'Paiements',
+  depenses: 'Dépenses',
   analyses_laboratoire: 'Laboratoire',
   actes_tarifs: 'Tarifs',
 };

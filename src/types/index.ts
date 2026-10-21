@@ -305,6 +305,37 @@ export interface ActeTarif {
   created_at: string;
 }
 
+// ===== Dépense (sortie de caisse) =====
+export type CategorieDepense =
+  | 'achat_materiel'
+  | 'medicaments'
+  | 'loyer'
+  | 'salaires'
+  | 'eau_electricite'
+  | 'entretien'
+  | 'fournitures'
+  | 'transport'
+  | 'impots'
+  | 'autre';
+
+export interface Depense {
+  id: string;
+  numero: string;
+  date_depense: string;
+  categorie: CategorieDepense;
+  libelle: string;
+  beneficiaire?: string | null;
+  montant: number;
+  mode_paiement: 'cash' | 'mobile_money' | 'carte' | 'virement' | 'chèque';
+  reference?: string | null;
+  notes?: string | null;
+  statut: 'validée' | 'annulée';
+  motif_annulation?: string | null;
+  enregistre_par?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ===== Journal d'audit =====
 export interface AuditLog {
   id: number;

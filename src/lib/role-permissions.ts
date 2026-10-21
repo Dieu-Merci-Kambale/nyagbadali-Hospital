@@ -14,6 +14,7 @@ export type AppModule =
   | 'laboratoire'
   | 'personnel'
   | 'facturation'
+  | 'depenses'
   | 'departements'
   | 'rapports'
   | 'statistiques'
@@ -32,6 +33,7 @@ export const moduleRoutes: Record<AppModule, string> = {
   'laboratoire': '/laboratoire',
   'personnel': '/personnel',
   'facturation': '/facturation',
+  'depenses': '/depenses',
   'departements': '/departements',
   'rapports': '/rapports',
   'statistiques': '/statistiques',
@@ -49,12 +51,12 @@ export const moduleRoutes: Record<AppModule, string> = {
 const rolePermissions: Record<RolePersonnel, AppModule[]> = {
   super_admin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'pharmacie', 'laboratoire', 'personnel', 'facturation',
+    'chambres', 'pharmacie', 'laboratoire', 'personnel', 'facturation', 'depenses',
     'departements', 'rapports', 'statistiques', 'audit', 'profil',
   ],
   admin: [
     'dashboard', 'patients', 'rendez-vous', 'pharmacie', 'chambres',
-    'personnel', 'facturation', 'departements', 'rapports', 'statistiques', 'audit', 'profil',
+    'personnel', 'facturation', 'depenses', 'departements', 'rapports', 'statistiques', 'audit', 'profil',
   ],
   medecin_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
@@ -79,7 +81,7 @@ const rolePermissions: Record<RolePersonnel, AppModule[]> = {
     'dashboard', 'pharmacie', 'profil',
   ],
   caissier: [
-    'dashboard', 'facturation', 'profil',
+    'dashboard', 'facturation', 'depenses', 'profil',
   ],
   receptionniste: [
     'dashboard', 'patients', 'rendez-vous', 'profil',
@@ -107,6 +109,16 @@ export function canProcessLab(role?: RolePersonnel | null): boolean {
 /** Seuls les administrateurs suppriment une facture, et seulement une facture annulée sans paiement. */
 export function canDeleteFacture(role: RolePersonnel | null | undefined, facture: { statut: string; paiements?: unknown[] | null }): boolean {
   return (role === 'super_admin' || role === 'admin') && facture.statut === 'annulée' && !(facture.paiements || []).length;
+}
+
+/** Une dépense enregistrée ne se modifie ou ne s'annule que par l'administration (le caissier enregistre). */
+export function canEditDepense(role: RolePersonnel | null | undefined, depense: { statut: string }): boolean {
+  return (role === 'super_admin' || role === 'admin') && depense.statut !== 'annulée';
+}
+
+/** Seuls les administrateurs suppriment une dépense, et seulement une dépense annulée. */
+export function canDeleteDepense(role: RolePersonnel | null | undefined, depense: { statut: string }): boolean {
+  return (role === 'super_admin' || role === 'admin') && depense.statut === 'annulée';
 }
 
 /**

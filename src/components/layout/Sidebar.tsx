@@ -25,6 +25,7 @@ import {
   BarChart3,
   ScrollText,
   FileSpreadsheet,
+  Wallet,
 } from 'lucide-react';
 
 // =====================================================
@@ -51,6 +52,7 @@ const allNavItems: NavItemConfig[] = [
   { module: 'personnel', label: 'Personnel', href: '/personnel', icon: <UserCog size={20} />, section: 'Administration' },
   { module: 'departements', label: 'Départements', href: '/departements', icon: <Building2 size={20} />, section: 'Administration' },
   { module: 'facturation', label: 'Facturation', href: '/facturation', icon: <Receipt size={20} />, section: 'Administration' },
+  { module: 'depenses', label: 'Dépenses', href: '/depenses', icon: <Wallet size={20} />, section: 'Administration' },
   { module: 'rapports', label: 'Rapports', href: '/rapports', icon: <FileSpreadsheet size={20} />, section: 'Pilotage' },
   { module: 'statistiques', label: 'Statistiques', href: '/statistiques', icon: <BarChart3 size={20} />, section: 'Pilotage' },
   { module: 'audit', label: "Journal d'activité", href: '/audit', icon: <ScrollText size={20} />, section: 'Pilotage' },

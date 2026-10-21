@@ -164,6 +164,24 @@ export const CATEGORIES_ACTES: Record<string, string> = {
   autre: 'Autre',
 };
 
+export const CATEGORIES_DEPENSES: Record<string, string> = {
+  achat_materiel: 'Achat de matériel',
+  medicaments: 'Médicaments & consommables',
+  loyer: 'Loyer',
+  salaires: 'Salaires & primes',
+  eau_electricite: 'Eau, électricité & internet',
+  entretien: 'Entretien & réparations',
+  fournitures: 'Fournitures de bureau',
+  transport: 'Transport & carburant',
+  impots: 'Impôts & taxes',
+  autre: 'Autre dépense',
+};
+
+export const DEPENSE_STATUTS: Record<string, StatusStyle> = {
+  'validée': { label: 'Validée', badge: 'badge-success' },
+  'annulée': { label: 'Annulée', badge: 'badge-danger' },
+};
+
 export const MOUVEMENT_TYPES: Record<string, StatusStyle> = {
   'entrée': { label: 'Entrée', badge: 'badge-success' },
   'sortie': { label: 'Sortie', badge: 'badge-info' },
@@ -189,6 +207,10 @@ export function explainDbError(error: { message?: string; code?: string } | null
   }
   // Message métier explicite levé par la base (RAISE EXCEPTION)
   if (error.code === 'P0001') return msg;
+  // Table des dépenses absente : script du module Dépenses non exécuté
+  if (/depenses/i.test(msg) && (error.code === '42P01' || error.code === 'PGRST205' || /does not exist|Could not find the table/i.test(msg))) {
+    return "Le module Dépenses nécessite la mise à jour de la base de données. Exécutez le script supabase/migrations/20261021_depenses.sql dans Supabase.";
+  }
   if (error.code === '42P01' || error.code === 'PGRST205' || /does not exist|Could not find the table/i.test(msg)) {
     return "Cette fonctionnalité nécessite la mise à jour de la base de données. Exécutez le script supabase/migrations/20261009_fonctionnalites_completes.sql dans Supabase.";
   }

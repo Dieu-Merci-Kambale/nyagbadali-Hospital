@@ -13,14 +13,30 @@ import {
   ArrowRight,
   Clock,
   Stethoscope,
+  TrendingDown,
+  Scale,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { hasAccess } from '@/lib/role-permissions';
+import { totalDepenses } from '@/lib/depenses';
 import { ColumnChart, type Datum } from '@/components/charts/SimpleCharts';
 import {
   formatMoney, formatDate, formatTime, toDateKey, startOfDayISO, endOfDayISO, statusBadge, RDV_STATUTS, LAB_STATUTS,
 } from '@/lib/format';
+
+interface StatCard {
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  color: string;
+  sub: string;
+  href?: string;
+  /** Sous-titre en rouge (sorties, déficit) */
+  negative?: boolean;
+  /** Valeur en rouge (solde négatif) */
+  alert?: boolean;
+}
 
 interface Stats {
   totalPatients: number;
@@ -29,6 +45,7 @@ interface Stats {
   litsOccupes: number;
   litsTotal: number;
   revenuMensuel: number;
+  depensesMensuelles: number;
   consultationsJour: number;
 }
 
@@ -36,7 +53,7 @@ export default function DashboardPage() {
   const { profile } = useAuth();
   const [stats, setStats] = useState<Stats>({
     totalPatients: 0, patientsAujourdhui: 0, rdvAujourdhui: 0,
-    litsOccupes: 0, litsTotal: 0, revenuMensuel: 0, consultationsJour: 0,
+    litsOccupes: 0, litsTotal: 0, revenuMensuel: 0, depensesMensuelles: 0, consultationsJour: 0,
   });
   const [loading, setLoading] = useState(true);
   const [recentPatients, setRecentPatients] = useState<any[]>([]);
@@ -49,6 +66,7 @@ export default function DashboardPage() {
   const can = (m: Parameters<typeof hasAccess>[1]) => (profile ? hasAccess(profile.role, m) : false);
   const isMedecin = profile?.role === 'medecin' || profile?.role === 'medecin_chef';
   const seesMoney = can('facturation') || can('statistiques');
+  const seesDepenses = can('depenses');
 
   useEffect(() => {
     if (!profile) return;
@@ -82,6 +100,7 @@ export default function DashboardPage() {
         labRes,
         medsRes,
         hospRes,
+        depensesRes,
       ] = await Promise.all([
         supabase.from('patients').select('*', { count: 'exact', head: true }),
         supabase.from('patients').select('*', { count: 'exact', head: true }).gte('created_at', debutJour),
@@ -100,6 +119,9 @@ export default function DashboardPage() {
           : Promise.resolve({ data: [] as any[] }),
         hasAccess(profile!.role, 'hospitalisation')
           ? supabase.from('hospitalisations').select('id, date_admission, motif_admission, patients(nom, prenom), lits(numero, chambres(numero))').eq('statut', 'actif').order('date_admission', { ascending: false }).limit(6)
+          : Promise.resolve({ data: [] as any[] }),
+        hasAccess(profile!.role, 'depenses')
+          ? supabase.from('depenses').select('montant, statut').gte('date_depense', debutMois)
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
@@ -126,6 +148,7 @@ export default function DashboardPage() {
         litsTotal: litsTotalQuery.count || 0,
         litsOccupes: litsOccupesQuery.count || 0,
         revenuMensuel,
+        depensesMensuelles: totalDepenses((depensesRes.data ?? []) as any[]),
         consultationsJour: consultationsJourQuery.count || 0,
       });
       setRevenus7j(series);
@@ -157,7 +180,7 @@ export default function DashboardPage() {
   const heure = new Date().getHours();
   const salutation = heure < 12 ? 'Bonjour' : heure < 18 ? 'Bon après-midi' : 'Bonsoir';
 
-  const statCards = [
+  const statCards: StatCard[] = [
     { label: 'Total patients', value: stats.totalPatients, icon: <Users size={22} />, color: 'blue', sub: `+${stats.patientsAujourdhui} aujourd'hui`, href: can('patients') ? '/patients' : undefined },
     { label: "RDV aujourd'hui", value: stats.rdvAujourdhui, icon: <CalendarDays size={22} />, color: 'green', sub: `${stats.consultationsJour} consultation(s) réalisée(s)`, href: can('rendez-vous') ? '/rendez-vous' : undefined },
     { label: 'Lits occupés', value: `${stats.litsOccupes}/${stats.litsTotal}`, icon: <BedDouble size={22} />, color: 'orange', sub: stats.litsTotal > 0 ? `${Math.round((stats.litsOccupes / stats.litsTotal) * 100)}% d'occupation` : 'Aucun lit configuré', href: can('hospitalisation') ? '/hospitalisation' : undefined },
@@ -165,6 +188,14 @@ export default function DashboardPage() {
       ? { label: 'Encaissements du mois', value: formatMoney(stats.revenuMensuel), icon: <TrendingUp size={22} />, color: 'purple', sub: 'ce mois', href: can('statistiques') ? '/statistiques' : '/facturation' }
       : { label: 'Consultations du jour', value: stats.consultationsJour, icon: <Stethoscope size={22} />, color: 'purple', sub: "aujourd'hui", href: can('consultations') ? '/consultations' : undefined },
   ];
+  // Caisse : dépenses du mois et solde (encaissements − dépenses), réservés à la caisse et à l'administration
+  const solde = stats.revenuMensuel - stats.depensesMensuelles;
+  if (seesDepenses) {
+    statCards.push(
+      { label: 'Dépenses du mois', value: formatMoney(stats.depensesMensuelles), icon: <TrendingDown size={22} />, color: 'red', sub: 'sorties de caisse', negative: true, href: '/depenses' },
+      { label: 'Solde de caisse du mois', value: formatMoney(solde), icon: <Scale size={22} />, color: solde < 0 ? 'red' : 'teal', sub: 'encaissements − dépenses', negative: solde < 0, alert: solde < 0, href: '/depenses' },
+    );
+  }
 
   const laboTitre = profile?.role === 'technicien_labo' ? 'Analyses à traiter' : 'Dernières analyses';
 
@@ -177,15 +208,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 24 }}>
+      <div className="stats-grid" style={{ gridTemplateColumns: `repeat(${statCards.length > 4 ? 3 : 4}, 1fr)`, marginBottom: 24 }}>
         {statCards.map((card) => {
           const content = (
             <div className="stat-card animate-slide-up" style={{ height: '100%' }}>
               <div className={`stat-card-icon ${card.color}`}>{card.icon}</div>
               <div className="stat-card-info">
                 <h3>{card.label}</h3>
-                <div className="stat-value" style={{ fontSize: String(card.value).length > 10 ? 20 : undefined }}>{card.value}</div>
-                <div className="stat-change positive">{card.sub}</div>
+                <div className="stat-value" style={{ fontSize: String(card.value).length > 10 ? 20 : undefined, color: card.alert ? 'var(--danger)' : undefined }}>{card.value}</div>
+                <div className={`stat-change ${card.negative ? 'negative' : 'positive'}`}>{card.sub}</div>
               </div>
             </div>
           );
