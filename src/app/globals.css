@@ -393,6 +393,7 @@ body {
 
 .main-content {
   flex: 1;
+  min-width: 0;
   margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
@@ -1502,20 +1503,25 @@ body {
   display: none;
 }
 
+/* Les tableaux larges défilent horizontalement dans leur carte au lieu d'élargir la page */
+*:has(> .data-table) {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Les icônes SVG gardent leur taille : seuls les médias s'adaptent à leur conteneur */
 img,
-svg,
 video,
 canvas {
   max-width: 100%;
 }
 
-@media (max-width: 1024px) {
-  /* Les tableaux larges défilent horizontalement dans leur carte au lieu d'élargir la page */
-  *:has(> .data-table) {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+.btn svg,
+.data-table svg {
+  flex-shrink: 0;
+}
 
+@media (max-width: 1024px) {
   html,
   body {
     overflow-x: hidden;
