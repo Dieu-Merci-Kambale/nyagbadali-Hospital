@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import { roleLabels, canProcessLab } from '@/lib/role-permissions';
 import { buildLaboratoryDocumentPdf } from '@/lib/document-models';
-import { findExamen } from '@/lib/lab-catalogue';
+import { parametresModele } from '@/lib/lab-catalogue';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { LAB_STATUTS, statusBadge, formatDateTime, getAge, explainDbError } from '@/lib/format';
 import type { ParametreAnalyse } from '@/types';
@@ -54,7 +54,8 @@ export default function AnalyseDetailPage() {
         *,
         patients(*),
         personnel!analyses_laboratoire_medecin_prescripteur_id_fkey(nom, prenom, specialite),
-        technicien:personnel!analyses_laboratoire_technicien_id_fkey(nom, prenom)
+        technicien:personnel!analyses_laboratoire_technicien_id_fkey(nom, prenom),
+        acte:actes_tarifs(parametres)
       `)
       .eq('id', id)
       .single();
@@ -74,7 +75,7 @@ export default function AnalyseDetailPage() {
       const estPayee = (p || []).length > 0;
       setPayee(estPayee);
       const saved: ParametreAnalyse[] = data.resultats?.parametres || [];
-      const template = findExamen(data.type_analyse)?.parametres.map((p) => ({ ...p, valeur: '', anormal: false })) || [];
+      const template = parametresModele(data.acte);
       setParametres(saved.length ? saved : template.length ? template : [emptyParam()]);
       setConclusion(data.resultats?.texte || '');
       setObservations(data.observations || '');

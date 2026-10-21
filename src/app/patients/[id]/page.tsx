@@ -10,6 +10,8 @@ import {
   Phone,
   Mail,
   MapPin,
+  Briefcase,
+  Heart,
   Calendar,
   Activity,
   FileText,
@@ -27,7 +29,7 @@ import {
 import MedicalAlerts from '@/components/patients/MedicalAlerts';
 import { hasAccess, canManagePatients } from '@/lib/role-permissions';
 import {
-  formatMoney, formatDate, formatTime, statusBadge, RDV_STATUTS, RDV_TYPES, HOSP_STATUTS, LAB_STATUTS, FACTURE_STATUTS, daysBetween,
+  formatMoney, formatDate, formatTime, statusBadge, RDV_STATUTS, RDV_TYPES, HOSP_STATUTS, LAB_STATUTS, FACTURE_STATUTS, ETATS_CIVILS, daysBetween,
 } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import Pagination from '@/components/ui/Pagination';
@@ -303,6 +305,20 @@ export default function PatientDossierPage() {
                   <div className="info-copy">
                     <div className="info-label">Adresse</div>
                     <div className="info-value">{patient.adresse || 'Non renseignée'}</div>
+                  </div>
+                </div>
+                <div className="info-row">
+                  <div className="info-icon"><Briefcase size={16} /></div>
+                  <div className="info-copy">
+                    <div className="info-label">Profession</div>
+                    <div className="info-value">{patient.profession || 'Non renseignée'}</div>
+                  </div>
+                </div>
+                <div className="info-row">
+                  <div className="info-icon"><Heart size={16} /></div>
+                  <div className="info-copy">
+                    <div className="info-label">État civil</div>
+                    <div className="info-value">{(patient.etat_civil && ETATS_CIVILS[patient.etat_civil]) || 'Non renseigné'}</div>
                   </div>
                 </div>
               </div>

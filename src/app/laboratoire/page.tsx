@@ -15,6 +15,7 @@ import {
   Eye,
   Siren,
   FileSpreadsheet,
+  BookOpen,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
@@ -24,6 +25,8 @@ import { usePagination } from '@/lib/usePagination';
 import { LAB_STATUTS, statusBadge, formatDate, formatTime, explainDbError } from '@/lib/format';
 import { statutDemande } from '@/lib/lab-catalogue';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
+import { useAuth } from '@/contexts/AuthContext';
+import { canRequestLab } from '@/lib/role-permissions';
 
 const TABS = [
   { key: 'actifs', label: 'À traiter' },
@@ -43,6 +46,7 @@ const DOT: Record<string, string> = {
 };
 
 export default function LaboratoirePage() {
+  const { profile } = useAuth();
   const [demandes, setDemandes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dbError, setDbError] = useState('');
@@ -121,16 +125,21 @@ export default function LaboratoirePage() {
           <h1 className="page-title">Laboratoire</h1>
           <p className="page-subtitle">Demandes d&apos;examens, prélèvements et résultats</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={() => fetchDemandes()} className="btn btn-outline" title="Actualiser">
             <RefreshCw size={16} /> Actualiser
           </button>
           <Link href="/laboratoire/rapports" className="btn btn-outline">
             <FileSpreadsheet size={16} /> Rapports
           </Link>
-          <Link href="/laboratoire/nouveau" className="btn btn-primary">
-            <Plus size={16} /> Nouvelle demande
+          <Link href="/laboratoire/examens" className="btn btn-outline">
+            <BookOpen size={16} /> Catalogue des examens
           </Link>
+          {canRequestLab(profile?.role) && (
+            <Link href="/laboratoire/nouveau" className="btn btn-primary">
+              <Plus size={16} /> Nouvelle demande
+            </Link>
+          )}
         </div>
       </div>
 

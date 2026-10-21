@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { ETATS_CIVILS } from '@/lib/format';
 
 // =====================================================
 // Types des modèles de documents
@@ -894,6 +895,8 @@ export async function buildPatientDocumentPdf(model: PatientDocumentModel) {
   kit.section('Coordonnées & couverture');
   kit.keyValues([
     { label: 'Adresse', value: patient.adresse || 'Non renseignée' },
+    { label: 'Profession', value: patient.profession || 'Non renseignée' },
+    { label: 'État civil', value: (patient.etat_civil && ETATS_CIVILS[patient.etat_civil]) || 'Non renseigné' },
     { label: 'Assurance', value: patient.assureur ? `${patient.assureur}${patient.numero_assurance ? ` (N° ${patient.numero_assurance})` : ''}` : 'Aucune' },
     { label: "Contact d'urgence", value: patient.contact_urgence_nom || 'Non renseigné' },
     { label: 'Téléphone urgence', value: patient.contact_urgence_tel || '—' },

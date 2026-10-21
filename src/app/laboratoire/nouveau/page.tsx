@@ -1,17 +1,16 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Save, AlertCircle, Loader2, Check, Siren } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, Loader2, Check, Siren, Inbox } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import PatientSearch from '@/components/ui/PatientSearch';
-import { LAB_CATALOGUE } from '@/lib/lab-catalogue';
-import { explainDbError } from '@/lib/format';
-
-const CATEGORIES = Array.from(new Set(LAB_CATALOGUE.map((e) => e.categorie)));
+import { fetchExamensLabo, grouperParFamille } from '@/lib/lab-catalogue';
+import { explainDbError, formatMoney } from '@/lib/format';
+import type { ActeTarif } from '@/types';
 
 function NouvelleAnalyseForm() {
   const router = useRouter();
@@ -25,10 +24,22 @@ function NouvelleAnalyseForm() {
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
-  const [autreExamen, setAutreExamen] = useState('');
   const [urgent, setUrgent] = useState(false);
+  // Examens enregistrés au catalogue par l'administration (seuls examens demandables)
+  const [catalogue, setCatalogue] = useState<ActeTarif[]>([]);
+  const [loadingCatalogue, setLoadingCatalogue] = useState(true);
 
   const isMedecin = profile?.role === 'medecin' || profile?.role === 'medecin_chef';
+
+  useEffect(() => {
+    fetchExamensLabo().then(({ examens, error }) => {
+      if (error) setErrorMsg(explainDbError(error));
+      setCatalogue(examens);
+      setLoadingCatalogue(false);
+    });
+  }, []);
+
+  const totalSelection = catalogue.filter((e) => selected.includes(e.libelle)).reduce((s, e) => s + Number(e.prix || 0), 0);
 
   const toggle = (nom: string) => {
     setSelected((prev) => (prev.includes(nom) ? prev.filter((n) => n !== nom) : [...prev, nom]));
@@ -48,7 +59,7 @@ function NouvelleAnalyseForm() {
       return;
     }
 
-    const examens = [...selected, ...(autreExamen.trim() ? [autreExamen.trim()] : [])];
+    const examens = selected;
     if (examens.length === 0) {
       setErrorMsg('Veuillez choisir au moins un examen.');
       return;
@@ -124,20 +135,32 @@ function NouvelleAnalyseForm() {
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-header">
             <span className="card-title">Examens demandés</span>
-            {selected.length > 0 && <span className="badge badge-info">{selected.length} sélectionné{selected.length > 1 ? 's' : ''}</span>}
+            {selected.length > 0 && (
+              <span className="badge badge-info">
+                {selected.length} sélectionné{selected.length > 1 ? 's' : ''} — {formatMoney(totalSelection)}
+              </span>
+            )}
           </div>
           <div className="card-body">
-            {CATEGORIES.map((cat) => (
-              <div key={cat} style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--neutral-400)', marginBottom: 8 }}>{cat}</div>
+            {loadingCatalogue ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}><Loader2 size={20} className="animate-spin" /></div>
+            ) : catalogue.length === 0 ? (
+              <div className="empty-state">
+                <Inbox className="empty-state-icon" />
+                <h3>Aucun examen au catalogue</h3>
+                <p>Les examens et leurs prix sont enregistrés par l&apos;administration dans Laboratoire › Catalogue des examens.</p>
+              </div>
+            ) : grouperParFamille(catalogue).map(({ famille, examens }) => (
+              <div key={famille} style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--neutral-400)', marginBottom: 8 }}>{famille}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
-                  {LAB_CATALOGUE.filter((ex) => ex.categorie === cat).map((ex) => {
-                    const active = selected.includes(ex.nom);
+                  {examens.map((ex) => {
+                    const active = selected.includes(ex.libelle);
                     return (
                       <button
-                        key={ex.code}
+                        key={ex.id}
                         type="button"
-                        onClick={() => toggle(ex.nom)}
+                        onClick={() => toggle(ex.libelle)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
                           padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
@@ -154,24 +177,14 @@ function NouvelleAnalyseForm() {
                         }}>
                           {active && <Check size={12} color="white" />}
                         </span>
-                        {ex.nom}
+                        <span style={{ flex: 1 }}>{ex.libelle}</span>
+                        <span style={{ fontSize: 12, color: 'var(--neutral-500)', fontWeight: 500, whiteSpace: 'nowrap' }}>{formatMoney(ex.prix)}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
             ))}
-
-            <div className="form-group" style={{ marginTop: 8 }}>
-              <label className="form-label">Autre examen (hors catalogue)</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Ex : Ionogramme sanguin"
-                value={autreExamen}
-                onChange={(e) => setAutreExamen(e.target.value)}
-              />
-            </div>
           </div>
         </div>
 

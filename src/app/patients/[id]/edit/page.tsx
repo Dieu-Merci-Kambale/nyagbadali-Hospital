@@ -10,6 +10,7 @@ import type { Patient } from '@/types';
 import AdminGuard from '@/components/AdminGuard';
 import { canManagePatients } from '@/lib/role-permissions';
 import type { RolePersonnel } from '@/types';
+import { ETATS_CIVILS } from '@/lib/format';
 
 export default function EditPatientPage() {
   return (
@@ -101,6 +102,12 @@ function EditPatientForm() {
     const antecedents = ((formData.get('antecedents') as string) || '').trim();
     if ('allergies' in (patient || {}) || allergies) data.allergies = allergies || null;
     if ('antecedents' in (patient || {}) || antecedents) data.antecedents = antecedents || null;
+
+    // Rubriques facultatives (colonnes ajoutées par la migration du 21/10/2026)
+    const profession = ((formData.get('profession') as string) || '').trim();
+    const etatCivil = (formData.get('etat_civil') as string) || '';
+    if ('profession' in (patient || {}) || profession) data.profession = profession || null;
+    if ('etat_civil' in (patient || {}) || etatCivil) data.etat_civil = etatCivil || null;
 
     const { error } = await supabase
       .from('patients')
@@ -201,6 +208,19 @@ function EditPatientForm() {
                   <option value="AB-">AB-</option>
                   <option value="O+">O+</option>
                   <option value="O-">O-</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="profession">Profession</label>
+                <input type="text" name="profession" className="form-input" id="profession" maxLength={100} placeholder="Ex : Enseignant, commerçante..." value={patient.profession || ''} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="etat_civil">État civil</label>
+                <select className="form-select" name="etat_civil" id="etat_civil" value={patient.etat_civil || ''} onChange={handleChange}>
+                  <option value="">Non renseigné</option>
+                  {Object.entries(ETATS_CIVILS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               </div>
             </div>

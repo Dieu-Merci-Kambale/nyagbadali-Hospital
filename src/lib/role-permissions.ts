@@ -55,7 +55,7 @@ const rolePermissions: Record<RolePersonnel, AppModule[]> = {
     'departements', 'rapports', 'statistiques', 'audit', 'profil',
   ],
   admin: [
-    'dashboard', 'patients', 'rendez-vous', 'pharmacie', 'chambres',
+    'dashboard', 'patients', 'rendez-vous', 'pharmacie', 'chambres', 'laboratoire',
     'personnel', 'facturation', 'depenses', 'departements', 'rapports', 'statistiques', 'audit', 'profil',
   ],
   medecin_chef: [
@@ -104,6 +104,18 @@ const LAB_PROCESSORS: RolePersonnel[] = ['super_admin', 'technicien_labo'];
 
 export function canProcessLab(role?: RolePersonnel | null): boolean {
   return !!role && LAB_PROCESSORS.includes(role);
+}
+
+/** Rôles qui demandent des examens (mêmes rôles que la fonction creer_demande_laboratoire de la base). */
+const LAB_REQUESTERS: RolePersonnel[] = ['super_admin', 'medecin_chef', 'medecin', 'infirmier_chef', 'infirmier', 'technicien_labo'];
+
+export function canRequestLab(role?: RolePersonnel | null): boolean {
+  return !!role && LAB_REQUESTERS.includes(role);
+}
+
+/** Seuls les administrateurs enregistrent les actes et examens du catalogue et fixent leurs prix. */
+export function canManageTarifs(role?: RolePersonnel | null): boolean {
+  return role === 'super_admin' || role === 'admin';
 }
 
 /** Seuls les administrateurs suppriment une facture, et seulement une facture annulée sans paiement. */

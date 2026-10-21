@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { HOSP_STATUTS } from '@/lib/format';
+import { HOSP_STATUTS, ETATS_CIVILS } from '@/lib/format';
 import type { ReportDefinition, ReportSection } from './types';
 import { fetchAll, iso, nom, docteur, sum, ratio, ageAt, groupBy, daysBetween, TRANCHES_AGE, trancheAge } from './helpers';
 
@@ -28,9 +28,13 @@ function listePatients(patients: any[], title: string): ReportSection {
     columns: [
       { header: 'Code', width: 13 }, { header: 'Nom & prénom', width: 22 }, { header: 'Sexe', width: 5, align: 'center' },
       { header: 'Âge', type: 'number', width: 5 }, { header: 'Né(e) le', type: 'date', width: 10 }, { header: 'Téléphone', width: 13 },
-      { header: 'Gr. sang.', width: 7 }, { header: 'Assurance', width: 14 }, { header: 'Enregistré le', type: 'date', width: 11 },
+      { header: 'Gr. sang.', width: 7 }, { header: 'Profession', width: 14 }, { header: 'État civil', width: 10 },
+      { header: 'Assurance', width: 14 }, { header: 'Enregistré le', type: 'date', width: 11 },
     ],
-    rows: patients.map((p) => [p.code_patient, nom(p), sexe(p.sexe), ageAt(p.date_naissance), p.date_naissance, p.telephone, p.groupe_sanguin, p.assureur, p.created_at]),
+    rows: patients.map((p) => [
+      p.code_patient, nom(p), sexe(p.sexe), ageAt(p.date_naissance), p.date_naissance, p.telephone, p.groupe_sanguin,
+      p.profession, (p.etat_civil && ETATS_CIVILS[p.etat_civil]) || null, p.assureur, p.created_at,
+    ]),
     emptyText: 'Aucun patient.',
   };
 }

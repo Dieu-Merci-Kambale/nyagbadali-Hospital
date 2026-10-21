@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { findExamen, LAB_CATALOGUE, statutDemande } from './lab-catalogue';
+import { describe, expect, it, vi } from 'vitest';
+import type { ActeTarif } from '@/types';
+import { grouperParFamille, parametresModele, statutDemande } from './lab-catalogue';
+
+vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
 const a = (...statuts: string[]) => statuts.map((statut) => ({ statut }));
+
+const examen = (libelle: string, famille: string | null, parametres: ActeTarif['parametres'] = []): ActeTarif => ({
+  id: libelle, code: libelle.toUpperCase(), libelle, categorie: 'laboratoire', prix: 1000, actif: true, famille, parametres, created_at: '',
+});
 
 describe('statutDemande', () => {
   it('est annulée quand tous les examens sont annulés (ou sans examen)', () => {
@@ -27,20 +34,30 @@ describe('statutDemande', () => {
   });
 });
 
-describe('findExamen', () => {
-  it('trouve un examen par son code ou son nom, sans tenir compte de la casse', () => {
-    expect(findExamen('nfs')?.code).toBe('NFS');
-    expect(findExamen('GLYCÉMIE À JEUN')?.code).toBe('GLY');
+describe('grouperParFamille', () => {
+  it('regroupe par famille dans l’ordre habituel, sans famille rangé dans « Autre »', () => {
+    const groupes = grouperParFamille([
+      examen('CRP', 'Biochimie'), examen('Scanner', null), examen('NFS', 'Hématologie'), examen('Glycémie', 'Biochimie'),
+    ]);
+    expect(groupes.map((g) => g.famille)).toEqual(['Hématologie', 'Biochimie', 'Autre']);
+    expect(groupes[1].examens.map((e) => e.libelle)).toEqual(['CRP', 'Glycémie']);
   });
 
-  it('renvoie undefined pour un examen hors catalogue ou vide', () => {
-    expect(findExamen('Scanner cérébral')).toBeUndefined();
-    expect(findExamen(null)).toBeUndefined();
+  it('range une famille inconnue en fin de liste, avec « Autre », par ordre alphabétique', () => {
+    const groupes = grouperParFamille([examen('X', 'Autre'), examen('Y', 'Immunologie'), examen('Z', 'Urines')]);
+    expect(groupes.map((g) => g.famille)).toEqual(['Urines', 'Autre', 'Immunologie']);
+  });
+});
+
+describe('parametresModele', () => {
+  it('prépare des paramètres vides à partir du modèle de l’examen', () => {
+    expect(parametresModele({ parametres: [{ nom: 'Glycémie', unite: 'g/L', reference: '0,70 – 1,10' }, { nom: ' ' }] })).toEqual([
+      { nom: 'Glycémie', unite: 'g/L', reference: '0,70 – 1,10', valeur: '', anormal: false },
+    ]);
   });
 
-  it('a des codes uniques et au moins un paramètre par examen', () => {
-    const codes = LAB_CATALOGUE.map((e) => e.code);
-    expect(new Set(codes).size).toBe(codes.length);
-    for (const e of LAB_CATALOGUE) expect(e.parametres.length).toBeGreaterThan(0);
+  it('renvoie une liste vide sans modèle', () => {
+    expect(parametresModele(null)).toEqual([]);
+    expect(parametresModele({ parametres: null })).toEqual([]);
   });
 });

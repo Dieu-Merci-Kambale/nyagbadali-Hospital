@@ -9,6 +9,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import AdminGuard from '@/components/AdminGuard';
 import { canManagePatients } from '@/lib/role-permissions';
 import type { RolePersonnel } from '@/types';
+import { ETATS_CIVILS } from '@/lib/format';
 
 export default function NouveauPatientPage() {
   return (
@@ -70,6 +71,12 @@ function NouveauPatientForm() {
       const antecedents = ((formData.get('antecedents') as string) || '').trim();
       if (allergies) data.allergies = allergies;
       if (antecedents) data.antecedents = antecedents;
+
+      // Rubriques facultatives : envoyées seulement si renseignées
+      const profession = ((formData.get('profession') as string) || '').trim();
+      const etatCivil = (formData.get('etat_civil') as string) || '';
+      if (profession) data.profession = profession;
+      if (etatCivil) data.etat_civil = etatCivil;
 
       const { data: created, error } = await supabase.from('patients').insert([data]).select('id').single();
 
@@ -158,6 +165,19 @@ function NouveauPatientForm() {
                   <option value="AB-">AB-</option>
                   <option value="O+">O+</option>
                   <option value="O-">O-</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="profession">Profession</label>
+                <input type="text" name="profession" className="form-input" id="profession" maxLength={100} placeholder="Ex : Enseignant, commerçante..." />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="etat_civil">État civil</label>
+                <select className="form-select" name="etat_civil" id="etat_civil" defaultValue="">
+                  <option value="">Non renseigné</option>
+                  {Object.entries(ETATS_CIVILS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               </div>
             </div>

@@ -153,6 +153,12 @@ export const MODES_PAIEMENT: Record<string, string> = {
   'chèque': 'Chèque',
 };
 
+export const ETATS_CIVILS: Record<string, string> = {
+  'célibataire': 'Célibataire',
+  'marié': 'Marié(e)',
+  'autre': 'Autre',
+};
+
 export const CATEGORIES_ACTES: Record<string, string> = {
   consultation: 'Consultation',
   hospitalisation: 'Hospitalisation',

@@ -5,7 +5,7 @@ import { Microscope, CheckCircle, Plus, Trash2, Save, XCircle, Edit, Loader2, Si
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
-import { findExamen } from '@/lib/lab-catalogue';
+import { parametresModele } from '@/lib/lab-catalogue';
 import { LAB_STATUTS, statusBadge, formatDateTime, explainDbError } from '@/lib/format';
 import type { ParametreAnalyse } from '@/types';
 
@@ -14,7 +14,8 @@ const emptyParam = (): ParametreAnalyse => ({ nom: '', valeur: '', unite: '', re
 function initialParams(analyse: any): ParametreAnalyse[] {
   const saved: ParametreAnalyse[] = analyse.resultats?.parametres || [];
   if (saved.length) return saved;
-  const template = findExamen(analyse.type_analyse)?.parametres.map((p) => ({ ...p, valeur: '', anormal: false })) || [];
+  // Modèle défini au catalogue des examens (jointure « acte » de la requête)
+  const template = parametresModele(analyse.acte);
   return template.length ? template : [emptyParam()];
 }
 

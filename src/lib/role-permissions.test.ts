@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { RolePersonnel } from '@/types';
 import {
-  canDeleteDepense, canDeleteFacture, canEditDepense, canManagePatients, canProcessLab, getDefaultRoute, hasAccess, hasRouteAccess, roleLabels,
+  canDeleteDepense, canDeleteFacture, canEditDepense, canManagePatients, canManageTarifs, canProcessLab, canRequestLab,
+  getDefaultRoute, hasAccess, hasRouteAccess, roleLabels,
 } from './role-permissions';
 
 const TOUS_LES_ROLES = Object.keys(roleLabels) as RolePersonnel[];
@@ -103,6 +104,28 @@ describe('canProcessLab', () => {
       expect(canProcessLab(role)).toBe(role === 'technicien_labo' || role === 'super_admin');
     }
     expect(canProcessLab(undefined)).toBe(false);
+  });
+});
+
+describe('catalogue des examens', () => {
+  it("ouvre l'onglet Laboratoire à l'administrateur pour gérer le catalogue", () => {
+    expect(hasAccess('admin', 'laboratoire')).toBe(true);
+    expect(hasRouteAccess('admin', '/laboratoire/examens')).toBe(true);
+  });
+
+  it('réserve l’ajout des examens et de leurs prix aux deux administrateurs', () => {
+    for (const role of TOUS_LES_ROLES) {
+      expect(canManageTarifs(role)).toBe(role === 'super_admin' || role === 'admin');
+    }
+    expect(canManageTarifs(null)).toBe(false);
+  });
+
+  it("ne laisse pas l'administrateur ni le caissier demander des examens", () => {
+    expect(canRequestLab('admin')).toBe(false);
+    expect(canRequestLab('caissier')).toBe(false);
+    expect(canRequestLab('medecin')).toBe(true);
+    expect(canRequestLab('infirmier')).toBe(true);
+    expect(canRequestLab('super_admin')).toBe(true);
   });
 });
 

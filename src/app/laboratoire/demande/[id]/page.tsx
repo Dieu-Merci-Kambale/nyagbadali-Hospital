@@ -10,13 +10,14 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import { roleLabels, hasAccess, canProcessLab } from '@/lib/role-permissions';
+import { roleLabels, hasAccess, canProcessLab, canRequestLab } from '@/lib/role-permissions';
 import { buildLabRequestOrderPdf, buildLabRequestReportPdf } from '@/lib/document-models';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
-import { LAB_CATALOGUE, statutDemande } from '@/lib/lab-catalogue';
-import { LAB_STATUTS, statusBadge, formatDateTime, getAge, explainDbError } from '@/lib/format';
+import { fetchExamensLabo, statutDemande } from '@/lib/lab-catalogue';
+import { LAB_STATUTS, statusBadge, formatDateTime, getAge, explainDbError, formatMoney } from '@/lib/format';
 import Modal from '@/components/ui/Modal';
 import AnalyseCard from '@/components/laboratoire/AnalyseCard';
+import type { ActeTarif } from '@/types';
 
 const STEPS = [
   { key: 'demandé', label: 'Demandé', icon: <FlaskConical size={16} /> },
@@ -39,13 +40,14 @@ export default function DemandeLaboratoirePage() {
   const [saving, setSaving] = useState(false);
   const [editingCount, setEditingCount] = useState(0);
   const [showAjout, setShowAjout] = useState(false);
+  // Identifiants des examens du catalogue cochés dans la fenêtre d'ajout
   const [ajout, setAjout] = useState<string[]>([]);
-  const [ajoutAutre, setAjoutAutre] = useState('');
+  const [catalogue, setCatalogue] = useState<ActeTarif[]>([]);
 
   // Le traitement des analyses (prélèvement, résultats, validation, annulation) relève du laboratoire ;
   // les médecins demandent les examens et consultent les résultats.
   const canProcess = canProcessLab(profile?.role);
-  const canRequest = profile ? hasAccess(profile.role, 'laboratoire') : false;
+  const canRequest = canRequestLab(profile?.role);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -57,7 +59,7 @@ export default function DemandeLaboratoirePage() {
         .single(),
       supabase
         .from('analyses_laboratoire')
-        .select('*, technicien:personnel!analyses_laboratoire_technicien_id_fkey(nom, prenom)')
+        .select('*, technicien:personnel!analyses_laboratoire_technicien_id_fkey(nom, prenom), acte:actes_tarifs(parametres)')
         .eq('demande_id', id)
         .order('created_at'),
     ]);
@@ -151,19 +153,27 @@ export default function DemandeLaboratoirePage() {
     load();
   };
 
+  const openAjout = async () => {
+    setShowAjout(true);
+    const { examens, error } = await fetchExamensLabo();
+    if (error) toast.error(explainDbError(error));
+    setCatalogue(examens);
+  };
+
   const handleAjouter = async () => {
-    const examens = [...ajout, ...(ajoutAutre.trim() ? [ajoutAutre.trim()] : [])];
+    const examens = catalogue.filter((e) => ajout.includes(e.id));
     if (!examens.length) {
       toast.error('Choisissez au moins un examen.');
       return;
     }
     setSaving(true);
-    const { error } = await supabase.from('analyses_laboratoire').insert(examens.map((type_analyse) => ({
+    const { error } = await supabase.from('analyses_laboratoire').insert(examens.map((e) => ({
       demande_id: id,
       patient_id: demande.patient_id,
       medecin_prescripteur_id: demande.medecin_prescripteur_id,
       consultation_id: demande.consultation_id,
-      type_analyse,
+      acte_id: e.id,
+      type_analyse: e.libelle,
       description: demande.renseignements,
       urgent: demande.urgent,
       statut: 'demandé',
@@ -176,7 +186,6 @@ export default function DemandeLaboratoirePage() {
     toast.success(`${examens.length} examen(s) ajouté(s) à la demande.`);
     setShowAjout(false);
     setAjout([]);
-    setAjoutAutre('');
     load();
   };
 
@@ -294,7 +303,7 @@ export default function DemandeLaboratoirePage() {
 
           {canRequest && global !== 'annulé' && (
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-              <button className="btn btn-outline" onClick={() => setShowAjout(true)}><Plus size={16} /> Ajouter un examen</button>
+              <button className="btn btn-outline" onClick={openAjout}><Plus size={16} /> Ajouter un examen</button>
               {canProcess && enCours && (
                 <button className="btn btn-ghost" onClick={handleAnnulerDemande} disabled={saving} style={{ color: 'var(--danger)' }}>
                   <XCircle size={16} /> Annuler la demande
@@ -352,18 +361,19 @@ export default function DemandeLaboratoirePage() {
           </>
         )}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-          {LAB_CATALOGUE.filter((e) => !dejaDemandes.has(e.nom)).map((e) => (
-            <label key={e.code} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--neutral-200)', cursor: 'pointer', background: ajout.includes(e.nom) ? 'var(--primary-50)' : 'white' }}>
-              <input type="checkbox" checked={ajout.includes(e.nom)} onChange={() => setAjout((prev) => (prev.includes(e.nom) ? prev.filter((n) => n !== e.nom) : [...prev, e.nom]))} />
-              {e.nom}
-            </label>
-          ))}
-        </div>
-        <div className="form-group">
-          <label className="form-label">Autre examen (hors catalogue)</label>
-          <input className="form-input" value={ajoutAutre} onChange={(e) => setAjoutAutre(e.target.value)} placeholder="Ex : Ionogramme sanguin" />
-        </div>
+        {catalogue.filter((e) => !dejaDemandes.has(e.libelle)).length === 0 ? (
+          <p className="form-help">Aucun autre examen disponible au catalogue (les examens sont enregistrés par l&apos;administration).</p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+            {catalogue.filter((e) => !dejaDemandes.has(e.libelle)).map((e) => (
+              <label key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--neutral-200)', cursor: 'pointer', background: ajout.includes(e.id) ? 'var(--primary-50)' : 'white' }}>
+                <input type="checkbox" checked={ajout.includes(e.id)} onChange={() => setAjout((prev) => (prev.includes(e.id) ? prev.filter((n) => n !== e.id) : [...prev, e.id]))} />
+                <span style={{ flex: 1 }}>{e.libelle}</span>
+                <span style={{ fontSize: 12, color: 'var(--neutral-500)', whiteSpace: 'nowrap' }}>{formatMoney(e.prix)}</span>
+              </label>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   );

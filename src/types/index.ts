@@ -7,6 +7,8 @@ export interface Patient {
   date_naissance: string;
   sexe: 'M' | 'F';
   groupe_sanguin?: string;
+  profession?: string | null;
+  etat_civil?: 'célibataire' | 'marié' | 'autre' | null;
   adresse?: string;
   telephone?: string;
   email?: string;
@@ -255,6 +257,8 @@ export interface AnalyseLaboratoire {
   medecin_prescripteur_id?: string | null;
   technicien_id?: string | null;
   consultation_id?: string | null;
+  /** Examen du catalogue (acte de catégorie « laboratoire ») */
+  acte_id?: string | null;
   type_analyse: string;
   description?: string | null;
   resultats?: { parametres?: ParametreAnalyse[]; texte?: string } | null;
@@ -302,6 +306,10 @@ export interface ActeTarif {
   categorie: 'consultation' | 'hospitalisation' | 'laboratoire' | 'imagerie' | 'soin' | 'chirurgie' | 'pharmacie' | 'autre';
   prix: number;
   actif: boolean;
+  /** Examens de laboratoire : famille (Hématologie, Biochimie…) */
+  famille?: string | null;
+  /** Examens de laboratoire : paramètres pré-remplis à la saisie des résultats */
+  parametres?: Omit<ParametreAnalyse, 'valeur' | 'anormal'>[] | null;
   created_at: string;
 }
 
