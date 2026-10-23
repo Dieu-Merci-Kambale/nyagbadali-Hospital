@@ -35,9 +35,10 @@ export default function MedicalHistoryFields({ patientId }: { patientId?: string
     if (!patientId) return;
     let ignore = false;
     supabase.from('patients').select('allergies, antecedents').eq('id', patientId).single().then(({ data, error }) => {
-      // Colonnes absentes (migration non appliquée) : la rubrique reste masquée
-      if (ignore || error || !data) return;
-      const values = { allergies: (data.allergies || '').trim(), antecedents: (data.antecedents || '').trim() };
+      if (ignore) return;
+      // En cas d'échec de lecture, les champs restent saisissables (valeurs vides)
+      if (error) console.error('Lecture allergies/antécédents :', error);
+      const values = { allergies: (data?.allergies || '').trim(), antecedents: (data?.antecedents || '').trim() };
       setInitial(values);
       setAllergies(values.allergies);
       setAntecedents(values.antecedents);
@@ -46,7 +47,8 @@ export default function MedicalHistoryFields({ patientId }: { patientId?: string
     return () => { ignore = true; };
   }, [patientId]);
 
-  if (!patientId || !loaded) return null;
+  // Champs désactivés (donc non envoyés) tant que le patient n'est pas choisi et chargé
+  const disabled = !patientId || !loaded;
 
   return (
     <div className="form-group">
@@ -60,11 +62,11 @@ export default function MedicalHistoryFields({ patientId }: { patientId?: string
               <span className="badge badge-danger" style={{ marginLeft: 8 }}><AlertTriangle size={12} /> Allergie signalée</span>
             )}
           </label>
-          <textarea name="allergies" id="allergies" className="form-textarea" rows={2} placeholder="Ex : Pénicilline, arachide, iode... (laisser vide si aucune)" value={allergies} onChange={(e) => setAllergies(e.target.value)}></textarea>
+          <textarea name="allergies" id="allergies" className="form-textarea" rows={2} placeholder={patientId ? 'Ex : Pénicilline, arachide, iode... (laisser vide si aucune)' : 'Choisissez d’abord le patient'} disabled={disabled} value={allergies} onChange={(e) => setAllergies(e.target.value)}></textarea>
         </div>
         <div className="form-group">
           <label className="form-label" htmlFor="antecedents">Antécédents médicaux et chirurgicaux</label>
-          <textarea name="antecedents" id="antecedents" className="form-textarea" rows={2} placeholder="Ex : HTA, diabète de type 2, appendicectomie (2019)..." value={antecedents} onChange={(e) => setAntecedents(e.target.value)}></textarea>
+          <textarea name="antecedents" id="antecedents" className="form-textarea" rows={2} placeholder={patientId ? 'Ex : HTA, diabète de type 2, appendicectomie (2019)...' : 'Choisissez d’abord le patient'} disabled={disabled} value={antecedents} onChange={(e) => setAntecedents(e.target.value)}></textarea>
         </div>
       </div>
       <p className="form-help">Enregistrés dans le dossier du patient : repris aux consultations suivantes et affichés en alerte lors des admissions et examens.</p>

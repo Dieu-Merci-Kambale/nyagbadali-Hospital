@@ -99,7 +99,7 @@ export default function ClinicalFields({ defaults = {}, allowCancel = false, pat
             <input type="text" name="motif" className="form-input" required defaultValue={defaults.motif || ''} placeholder="Symptôme principal..." />
           </div>
 
-          {patientId && <MedicalHistoryFields key={patientId} patientId={patientId} />}
+          <MedicalHistoryFields key={patientId || 'aucun'} patientId={patientId} />
 
           <div className="form-group">
             <label className="form-label">Anamnèse (histoire de la maladie, antécédents récents)</label>
