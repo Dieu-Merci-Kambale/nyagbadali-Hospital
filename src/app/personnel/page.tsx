@@ -180,7 +180,7 @@ export default function PersonnelPage() {
                   </div>
                 </div>
                 <div style={{ marginTop: 16 }}>
-                  <Link href={`/personnel/${person.id}/edit`} className="btn btn-outline btn-sm" style={{ width: '100%' }}>
+                  <Link href={`/personnel/${person.id}/edit`} className="btn btn-primary btn-sm" style={{ width: '100%' }}>
                     Gérer
                   </Link>
                 </div>
@@ -223,7 +223,7 @@ export default function PersonnelPage() {
                   <td style={{ fontSize: 12 }}>{person.email}</td>
                   <td><span className={`badge ${person.statut === 'actif' ? 'badge-success' : 'badge-neutral'}`}>{person.statut}</span></td>
                   <td>
-                    <Link href={`/personnel/${person.id}/edit`} className="btn btn-outline btn-sm">Gérer</Link>
+                    <Link href={`/personnel/${person.id}/edit`} className="btn btn-primary btn-sm">Gérer</Link>
                   </td>
                 </tr>
               ))}
