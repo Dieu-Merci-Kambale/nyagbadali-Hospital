@@ -7,8 +7,8 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
-import MedicalAlerts from '@/components/patients/MedicalAlerts';
 import ClinicalFields, { readClinicalForm } from '@/components/consultations/ClinicalFields';
+import MedicalHistoryFields, { readMedicalHistoryForm } from '@/components/consultations/MedicalHistoryFields';
 import { explainDbError } from '@/lib/format';
 
 export default function EditConsultationPage() {
@@ -64,6 +64,14 @@ export default function EditConsultationPage() {
       setSaving(false);
       return;
     }
+
+    // Allergies et antécédents recueillis pendant la consultation → fiche patient
+    const historique = readMedicalHistoryForm(formData);
+    if (historique) {
+      const { error: histError } = await supabase.from('patients').update(historique).eq('id', consultation.patient_id);
+      if (histError) toast.error(`Allergies/antécédents non enregistrés : ${explainDbError(histError)}`);
+    }
+
     toast.success('Consultation mise à jour avec succès !');
     router.push(`/consultations/${id}`);
   };
@@ -99,9 +107,8 @@ export default function EditConsultationPage() {
         </div>
       </div>
 
-      <MedicalAlerts patientId={consultation.patient_id} />
-
       <form onSubmit={handleSubmit}>
+        <MedicalHistoryFields patientId={consultation.patient_id} />
         <ClinicalFields defaults={consultation} allowCancel />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>

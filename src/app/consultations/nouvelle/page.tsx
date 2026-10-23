@@ -8,8 +8,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import PatientSearch from '@/components/ui/PatientSearch';
-import MedicalAlerts from '@/components/patients/MedicalAlerts';
 import ClinicalFields, { readClinicalForm } from '@/components/consultations/ClinicalFields';
+import MedicalHistoryFields, { readMedicalHistoryForm } from '@/components/consultations/MedicalHistoryFields';
 import { explainDbError } from '@/lib/format';
 
 function NouvelleConsultationForm() {
@@ -68,6 +68,13 @@ function NouvelleConsultationForm() {
       return;
     }
 
+    // Allergies et antécédents recueillis pendant la consultation → fiche patient
+    const historique = readMedicalHistoryForm(formData);
+    if (historique) {
+      const { error: histError } = await supabase.from('patients').update(historique).eq('id', selectedPatientId);
+      if (histError) toast.error(`Allergies/antécédents non enregistrés : ${explainDbError(histError)}`);
+    }
+
     // Le rendez-vous à l'origine de la consultation est clôturé
     if (rdvIdParam) {
       await supabase.from('rendez_vous').update({ statut: 'terminé' }).eq('id', rdvIdParam);
@@ -104,9 +111,10 @@ function NouvelleConsultationForm() {
               onChange={(id) => setSelectedPatientId(id)}
               initialPatientId={patientIdParam}
             />
-            {selectedPatientId && <MedicalAlerts key={selectedPatientId} patientId={selectedPatientId} />}
           </div>
         </div>
+
+        {selectedPatientId && <MedicalHistoryFields key={selectedPatientId} patientId={selectedPatientId} />}
 
         <ClinicalFields />
 
