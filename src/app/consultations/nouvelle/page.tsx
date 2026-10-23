@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import PatientSearch from '@/components/ui/PatientSearch';
 import ClinicalFields, { readClinicalForm } from '@/components/consultations/ClinicalFields';
-import MedicalHistoryFields, { readMedicalHistoryForm } from '@/components/consultations/MedicalHistoryFields';
+import { readMedicalHistoryForm } from '@/components/consultations/MedicalHistoryFields';
 import { explainDbError } from '@/lib/format';
 
 function NouvelleConsultationForm() {
@@ -114,9 +114,7 @@ function NouvelleConsultationForm() {
           </div>
         </div>
 
-        {selectedPatientId && <MedicalHistoryFields key={selectedPatientId} patientId={selectedPatientId} />}
-
-        <ClinicalFields />
+        <ClinicalFields patientId={selectedPatientId || undefined} />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
           <button type="button" onClick={() => router.back()} className="btn btn-outline">Annuler</button>

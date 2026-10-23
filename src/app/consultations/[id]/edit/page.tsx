@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
 import ClinicalFields, { readClinicalForm } from '@/components/consultations/ClinicalFields';
-import MedicalHistoryFields, { readMedicalHistoryForm } from '@/components/consultations/MedicalHistoryFields';
+import { readMedicalHistoryForm } from '@/components/consultations/MedicalHistoryFields';
 import { explainDbError } from '@/lib/format';
 
 export default function EditConsultationPage() {
@@ -108,8 +108,7 @@ export default function EditConsultationPage() {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <MedicalHistoryFields patientId={consultation.patient_id} />
-        <ClinicalFields defaults={consultation} allowCancel />
+        <ClinicalFields defaults={consultation} allowCancel patientId={consultation.patient_id} />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
           <button type="button" onClick={() => router.back()} className="btn btn-outline">Annuler</button>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import MedicalHistoryFields from './MedicalHistoryFields';
 
 // =====================================================
 // Champs cliniques partagés entre la création et la modification
@@ -47,7 +48,7 @@ export function readClinicalForm(formData: FormData) {
   };
 }
 
-export default function ClinicalFields({ defaults = {}, allowCancel = false }: { defaults?: ClinicalDefaults; allowCancel?: boolean }) {
+export default function ClinicalFields({ defaults = {}, allowCancel = false, patientId }: { defaults?: ClinicalDefaults; allowCancel?: boolean; patientId?: string }) {
   const c = defaults.constantes || {};
   const [poids, setPoids] = useState<string>(c.poids ? String(c.poids) : '');
   const [taille, setTaille] = useState<string>(c.taille ? String(c.taille) : '');
@@ -97,6 +98,8 @@ export default function ClinicalFields({ defaults = {}, allowCancel = false }: {
             <label className="form-label">Motif de consultation *</label>
             <input type="text" name="motif" className="form-input" required defaultValue={defaults.motif || ''} placeholder="Symptôme principal..." />
           </div>
+
+          {patientId && <MedicalHistoryFields key={patientId} patientId={patientId} />}
 
           <div className="form-group">
             <label className="form-label">Anamnèse (histoire de la maladie, antécédents récents)</label>
