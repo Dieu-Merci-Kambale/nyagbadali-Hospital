@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, Loader2, KeyRound, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from 'react-hot-toast';
 import { roleLabels } from '@/lib/role-permissions';
+import { useAuth } from '@/contexts/AuthContext';
+import { deletePersonnelAction, resetPasswordPersonnelAction } from '@/app/actions/personnel';
 
 export default function EditPersonnelPage() {
   const router = useRouter();
@@ -19,6 +21,10 @@ export default function EditPersonnelPage() {
   const [personnel, setPersonnel] = useState<any>(null);
   const [departements, setDepartements] = useState<any[]>([]);
   const { confirm } = useConfirm();
+  const { profile } = useAuth();
+  const [actionEnCours, setActionEnCours] = useState<'reset' | 'delete' | null>(null);
+  const estSuperAdmin = profile?.role === 'super_admin';
+  const estSoiMeme = profile?.id === id;
 
   useEffect(() => {
     async function fetchData() {
@@ -88,6 +94,46 @@ export default function EditPersonnelPage() {
       console.error(err);
       setErrorMsg(err.message || 'Une erreur inattendue est survenue.');
       setSaving(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    const isConfirmed = await confirm({
+      title: 'Réinitialiser le mot de passe',
+      message: `Le mot de passe de ${personnel.prenom} ${personnel.nom} sera remplacé par le mot de passe par défaut. Continuer ?`,
+      confirmText: 'Oui, réinitialiser',
+      type: 'warning'
+    });
+    if (!isConfirmed) return;
+
+    setActionEnCours('reset');
+    const { data: { session } } = await supabase.auth.getSession();
+    const result = await resetPasswordPersonnelAction(String(id), session?.access_token);
+    setActionEnCours(null);
+
+    if (result.error) toast.error(result.error);
+    else toast.success(`Mot de passe réinitialisé : ${result.motDePasse}`, { duration: 10000 });
+  };
+
+  const handleDelete = async () => {
+    const isConfirmed = await confirm({
+      title: 'Supprimer ce membre du personnel',
+      message: `${personnel.prenom} ${personnel.nom} et son compte de connexion seront définitivement supprimés. Cette action est irréversible.`,
+      confirmText: 'Oui, supprimer',
+      type: 'danger'
+    });
+    if (!isConfirmed) return;
+
+    setActionEnCours('delete');
+    const { data: { session } } = await supabase.auth.getSession();
+    const result = await deletePersonnelAction(String(id), session?.access_token);
+    setActionEnCours(null);
+
+    if (result.error) {
+      toast.error(result.error, { duration: 6000 });
+    } else {
+      toast.success('Membre du personnel supprimé.');
+      router.push('/personnel');
     }
   };
 
@@ -204,6 +250,39 @@ export default function EditPersonnelPage() {
           </button>
         </div>
       </form>
+
+      {estSuperAdmin && (
+        <div className="card" style={{ maxWidth: 800, marginTop: 32, borderColor: 'var(--danger)' }}>
+          <div className="card-body">
+            <h3 style={{ marginBottom: 4, color: 'var(--danger)' }}>Actions sensibles</h3>
+            <p className="form-help" style={{ marginBottom: 16 }}>Réservées au super administrateur.</p>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>Réinitialiser le mot de passe</div>
+                <p className="form-help">Remplace le mot de passe actuel par le mot de passe par défaut de l&apos;établissement.</p>
+              </div>
+              <button type="button" className="btn btn-outline" onClick={handleResetPassword} disabled={actionEnCours !== null}>
+                {actionEnCours === 'reset' ? <Loader2 size={18} className="animate-spin" /> : <KeyRound size={18} />} Réinitialiser
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>Supprimer ce membre</div>
+                <p className="form-help">
+                  {estSoiMeme
+                    ? 'Vous ne pouvez pas supprimer votre propre compte.'
+                    : "Supprime définitivement la fiche et le compte de connexion. Impossible si le membre a un historique : passez-le alors en « Inactif »."}
+                </p>
+              </div>
+              <button type="button" className="btn btn-danger" onClick={handleDelete} disabled={actionEnCours !== null || estSoiMeme}>
+                {actionEnCours === 'delete' ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />} Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
