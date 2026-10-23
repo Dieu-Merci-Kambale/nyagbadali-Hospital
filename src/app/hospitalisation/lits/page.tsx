@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, BedDouble, AlertCircle, Loader2, Info } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { compareChambres } from '@/lib/batiments';
 
 export default function LitsPage() {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function LitsPage() {
         // Or, une hospitalisation active a statut='actif'.
         const enrichedChambres = data?.map(chambre => ({
           ...chambre,
-          lits: chambre.lits?.sort((a: any, b: any) => a.numero.localeCompare(b.numero)).map((lit: any) => {
+          lits: chambre.lits?.sort((a: any, b: any) => a.numero.localeCompare(b.numero, 'fr', { numeric: true })).map((lit: any) => {
             const activeHosp = lit.hospitalisations?.find((h: any) => h.statut === 'actif');
             return {
               ...lit,
@@ -39,7 +40,7 @@ export default function LitsPage() {
             };
           })
         }));
-        setChambres(enrichedChambres || []);
+        setChambres((enrichedChambres || []).sort(compareChambres));
       }
       setLoading(false);
     }
@@ -89,10 +90,10 @@ export default function LitsPage() {
             <div style={{ padding: '16px 20px', backgroundColor: 'var(--neutral-50)', borderBottom: '1px solid var(--neutral-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--neutral-900)' }}>
-                  Chambre {chambre.numero}
+                  {chambre.numero}
                 </h3>
-                <span style={{ fontSize: 12, color: 'var(--neutral-500)', textTransform: 'capitalize' }}>
-                  {chambre.type} • {chambre.etage}
+                <span style={{ fontSize: 12, color: 'var(--neutral-500)' }}>
+                  {chambre.etage || '—'} • <span style={{ textTransform: 'capitalize' }}>{chambre.type}</span>
                 </span>
               </div>
               <div style={{ 
@@ -137,7 +138,7 @@ export default function LitsPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <BedDouble size={20} color={iconColor} />
                         <div>
-                          <div style={{ fontWeight: 600, color: 'var(--neutral-900)', fontSize: 14 }}>{lit.numero}</div>
+                          <div style={{ fontWeight: 600, color: 'var(--neutral-900)', fontSize: 14 }}>Lit {lit.numero}</div>
                           <div style={{ fontSize: 12, color: 'var(--neutral-600)', textTransform: 'capitalize' }}>
                             {lit.type_lit.replace('_', ' ')}
                           </div>

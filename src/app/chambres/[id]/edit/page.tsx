@@ -6,6 +6,7 @@ import { ArrowLeft, Save, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-reac
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
 import AdminGuard from '@/components/AdminGuard';
+import { batimentOptions } from '@/lib/batiments';
 
 export default function EditChambrePage({ params }: { params: Promise<{ id: string }> }) {
   return (
@@ -79,7 +80,7 @@ function EditChambreForm({ params }: { params: Promise<{ id: string }> }) {
       etage: formData.get('etage') as string,
       type: formData.get('type') as string,
       capacite: parseInt(formData.get('capacite') as string, 10),
-      departement_id: formData.get('departement_id') as string,
+      departement_id: (formData.get('departement_id') as string) || null,
     };
 
     try {
@@ -175,7 +176,7 @@ function EditChambreForm({ params }: { params: Promise<{ id: string }> }) {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="page-title">Modifier Chambre {chambre.numero}</h1>
+            <h1 className="page-title">Modifier : {chambre.numero}</h1>
             <p className="page-subtitle">Gérez la chambre et ses lits associés</p>
           </div>
         </div>
@@ -197,13 +198,14 @@ function EditChambreForm({ params }: { params: Promise<{ id: string }> }) {
           <div className="card-body">
             <form onSubmit={handleUpdateChambre}>
               <div className="form-group">
-                <label className="form-label">Numéro de la chambre *</label>
-                <input type="text" name="numero" className="form-input" required defaultValue={chambre.numero} />
+                <label className="form-label">Nom de la chambre / salle *</label>
+                <input type="text" name="numero" className="form-input" required maxLength={40} defaultValue={chambre.numero} />
               </div>
-              
+
               <div className="form-group">
-                <label className="form-label">Département *</label>
-                <select name="departement_id" className="form-select" required defaultValue={chambre.departement_id}>
+                <label className="form-label">Département</label>
+                <select name="departement_id" className="form-select" defaultValue={chambre.departement_id || ''}>
+                  <option value="">-- Aucun département --</option>
                   {departements.map(d => (
                     <option key={d.id} value={d.id}>{d.nom}</option>
                   ))}
@@ -211,8 +213,11 @@ function EditChambreForm({ params }: { params: Promise<{ id: string }> }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Étage *</label>
-                <input type="text" name="etage" className="form-input" required defaultValue={chambre.etage} />
+                <label className="form-label">Bâtiment *</label>
+                <select name="etage" className="form-select" required defaultValue={chambre.etage || ''}>
+                  <option value="" disabled>-- Choisir un bâtiment --</option>
+                  {batimentOptions(chambre.etage).map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
               </div>
 
               <div className="form-group">

@@ -1280,7 +1280,7 @@ export async function buildAdmissionDocumentPdf(model: AdmissionDocumentModel) {
   kit.keyValues([
     { label: "Date d'admission", value: formatDateTime(hospitalisation.date_admission) },
     { label: 'Date de sortie', value: hospitalisation.date_sortie ? formatDateTime(hospitalisation.date_sortie) : 'Séjour en cours' },
-    { label: 'Étage', value: chambre.etage ? String(chambre.etage) : '—' },
+    { label: 'Bâtiment', value: chambre.etage ? String(chambre.etage) : '—' },
     { label: 'Type de lit', value: capitalize(lit.type_lit) || '—' },
   ]);
 

@@ -6,6 +6,7 @@ import { ArrowLeft, Save, AlertCircle, Loader2, BedDouble } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import { compareLits, libelleLit } from '@/lib/batiments';
 import { useConfirm } from '@/context/ConfirmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import PatientSearch from '@/components/ui/PatientSearch';
@@ -34,7 +35,7 @@ function NouvelleAdmissionForm() {
         supabase.from('lits').select('*, chambres(numero, etage, type)').eq('statut', 'disponible').order('numero'),
       ]);
       setMedecins(mData || []);
-      setLitsDisponibles(lData || []);
+      setLitsDisponibles((lData || []).sort(compareLits));
     }
     fetchData();
   }, []);
@@ -195,7 +196,7 @@ function NouvelleAdmissionForm() {
                   <option value="">Sélectionnez un lit...</option>
                   {litsDisponibles.map((lit) => (
                     <option key={lit.id} value={lit.id}>
-                      Chambre {lit.chambres?.numero} ({lit.chambres?.type}) - Lit {lit.numero} ({String(lit.type_lit || '').replace('_', ' ')})
+                      {libelleLit(lit)}
                     </option>
                   ))}
                 </select>

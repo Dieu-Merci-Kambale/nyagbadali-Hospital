@@ -20,6 +20,7 @@ import Pagination from '@/components/ui/Pagination';
 import { usePagination } from '@/lib/usePagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { isAdminRole, RestrictionBanner } from '@/components/AdminGuard';
+import { compareChambres } from '@/lib/batiments';
 
 const RESERVE = "Accès refusé : opération réservée au super administrateur et à l'administrateur";
 // Apparence uniforme des boutons verrouillés (grisés, sans effet au survol)
@@ -51,7 +52,7 @@ export default function ChambresPage() {
       if (error) {
         console.error('Erreur de chargement:', error);
       } else {
-        setChambres(data || []);
+        setChambres((data || []).sort(compareChambres));
       }
       setLoading(false);
     }
@@ -63,6 +64,7 @@ export default function ChambresPage() {
     return (
       search === '' ||
       c.numero.toLowerCase().includes(s) ||
+      (c.etage && c.etage.toLowerCase().includes(s)) ||
       (c.departement?.nom && c.departement.nom.toLowerCase().includes(s))
     );
   });
@@ -160,7 +162,7 @@ export default function ChambresPage() {
             <Search className="header-search-icon" />
             <input
               type="text"
-              placeholder="Rechercher par numéro ou département..."
+              placeholder="Rechercher par chambre, bâtiment ou département..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -189,9 +191,9 @@ export default function ChambresPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Numéro</th>
+                <th>Chambre / salle</th>
+                <th>Bâtiment</th>
                 <th>Département</th>
-                <th>Étage</th>
                 <th>Type</th>
                 <th>Capacité</th>
                 <th>Lits Enregistrés</th>
@@ -206,9 +208,9 @@ export default function ChambresPage() {
                 
                 return (
                   <tr key={c.id} className="animate-slide-in-right" style={{ animationDelay: `${index * 0.03}s` }}>
-                    <td style={{ fontWeight: 600, fontSize: 15 }}>Chambre {c.numero}</td>
+                    <td style={{ fontWeight: 600, fontSize: 15 }}>{c.numero}</td>
+                    <td>{c.etage || '—'}</td>
                     <td>{c.departement?.nom || '—'}</td>
-                    <td>{c.etage}</td>
                     <td style={{ textTransform: 'capitalize' }}>{c.type}</td>
                     <td>{c.capacite} lits max</td>
                     <td>

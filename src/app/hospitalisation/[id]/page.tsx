@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
+import { compareLits, libelleLit } from '@/lib/batiments';
 import Pagination from '@/components/ui/Pagination';
 import { usePagination } from '@/lib/usePagination';
 import { useAuth } from '@/contexts/AuthContext';
@@ -126,7 +127,7 @@ export default function HospitalisationDetailPage() {
       .select('id, numero, type_lit, chambres(numero, etage, type)')
       .eq('statut', 'disponible')
       .order('numero');
-    setLitsDispo(data || []);
+    setLitsDispo(((data || []) as any[]).sort(compareLits));
     setNewLitId('');
     setShowTransfer(true);
   };
@@ -241,8 +242,11 @@ export default function HospitalisationDetailPage() {
             <h3>Lit</h3>
             {hosp.lits ? (
               <>
-                <div style={{ fontWeight: 700 }}>Ch. {hosp.lits.chambres?.numero} — {hosp.lits.numero}</div>
-                <div style={{ fontSize: 12, color: 'var(--neutral-500)', textTransform: 'capitalize' }}>{String(hosp.lits.type_lit || '').replace('_', ' ')}</div>
+                <div style={{ fontWeight: 700 }}>{hosp.lits.chambres?.numero} — Lit {hosp.lits.numero}</div>
+                <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>
+                  {hosp.lits.chambres?.etage ? `${hosp.lits.chambres.etage} • ` : ''}
+                  <span style={{ textTransform: 'capitalize' }}>{String(hosp.lits.type_lit || '').replace('_', ' ')}</span>
+                </div>
               </>
             ) : <div style={{ fontWeight: 700, color: 'var(--danger)' }}>Aucun lit</div>}
           </div>
@@ -427,7 +431,7 @@ export default function HospitalisationDetailPage() {
               <option value="">Sélectionnez un lit disponible...</option>
               {litsDispo.map((l) => (
                 <option key={l.id} value={l.id}>
-                  Chambre {l.chambres?.numero} ({l.chambres?.type}) — Lit {l.numero} ({String(l.type_lit || '').replace('_', ' ')})
+                  {libelleLit(l)}
                 </option>
               ))}
             </select>

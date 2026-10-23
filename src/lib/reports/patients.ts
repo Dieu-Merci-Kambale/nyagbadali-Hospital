@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { HOSP_STATUTS, ETATS_CIVILS } from '@/lib/format';
+import { compareChambres } from '@/lib/batiments';
 import type { ReportDefinition, ReportSection } from './types';
 import { fetchAll, iso, nom, docteur, sum, ratio, ageAt, groupBy, daysBetween, TRANCHES_AGE, trancheAge } from './helpers';
 
@@ -208,7 +209,7 @@ export const PATIENT_REPORTS: ReportDefinition[] = [
         fetchAll((a, b) => supabase.from('hospitalisations').select('lit_id, date_admission, patients(nom, prenom, code_patient)').eq('statut', 'actif').range(a, b)),
       ]);
       const occupant = new Map(hosp.map((h: any) => [h.lit_id, h]));
-      const parChambre = chambres.map((c: any) => {
+      const parChambre = [...chambres].sort(compareChambres).map((c: any) => {
         const ls = lits.filter((l: any) => l.chambre_id === c.id);
         const occ = ls.filter((l: any) => l.statut === 'occupé').length;
         return [c.numero, c.etage, c.type, c.departements?.nom, ls.length, occ, ls.filter((l: any) => l.statut === 'disponible').length, ls.filter((l: any) => ['maintenance', 'réservé'].includes(l.statut)).length, ratio(occ, ls.length)];
@@ -227,7 +228,7 @@ export const PATIENT_REPORTS: ReportDefinition[] = [
           {
             title: 'Occupation par chambre',
             columns: [
-              { header: 'Chambre', width: 10 }, { header: 'Étage', width: 11 }, { header: 'Type', width: 12 }, { header: 'Service', width: 17 },
+              { header: 'Chambre', width: 22 }, { header: 'Bâtiment', width: 11 }, { header: 'Type', width: 12 }, { header: 'Service', width: 17 },
               { header: 'Lits', type: 'number', width: 8 }, { header: 'Occupés', type: 'number', width: 9 }, { header: 'Libres', type: 'number', width: 9 },
               { header: 'Indispo.', type: 'number', width: 9 }, { header: 'Occupation', type: 'percent', width: 11 },
             ],

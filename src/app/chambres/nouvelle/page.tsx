@@ -6,6 +6,7 @@ import { ArrowLeft, Save, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/context/ConfirmContext';
 import AdminGuard from '@/components/AdminGuard';
+import { BATIMENTS } from '@/lib/batiments';
 
 export default function NouvelleChambrePage() {
   return (
@@ -55,7 +56,7 @@ function NouvelleChambreForm() {
       etage: formData.get('etage') as string,
       type: formData.get('type') as string,
       capacite: parseInt(formData.get('capacite') as string, 10),
-      departement_id: formData.get('departement_id') as string,
+      departement_id: (formData.get('departement_id') as string) || null,
     };
 
     try {
@@ -106,13 +107,13 @@ function NouvelleChambreForm() {
             
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Numéro de la chambre *</label>
-                <input type="text" name="numero" className="form-input" required placeholder="Ex: 101, A204..." />
+                <label className="form-label">Nom de la chambre / salle *</label>
+                <input type="text" name="numero" className="form-input" required maxLength={40} placeholder="Ex : Chirurgie homme, Privé 1..." />
               </div>
               <div className="form-group">
-                <label className="form-label">Département *</label>
-                <select name="departement_id" className="form-select" required>
-                  <option value="">-- Choisir un département --</option>
+                <label className="form-label">Département</label>
+                <select name="departement_id" className="form-select">
+                  <option value="">-- Aucun département --</option>
                   {departements.map(d => (
                     <option key={d.id} value={d.id}>{d.nom}</option>
                   ))}
@@ -122,8 +123,11 @@ function NouvelleChambreForm() {
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Étage *</label>
-                <input type="text" name="etage" className="form-input" required placeholder="Ex: Rez-de-chaussée, 1er..." />
+                <label className="form-label">Bâtiment *</label>
+                <select name="etage" className="form-select" required defaultValue="">
+                  <option value="" disabled>-- Choisir un bâtiment --</option>
+                  {BATIMENTS.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Type de chambre *</label>
