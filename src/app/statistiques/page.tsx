@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BarChart3, Loader2, Download, Stethoscope, UserPlus, BedDouble, Banknote, Receipt, CalendarX, FlaskConical, TrendingUp, Table2,
+  Wallet, Scale, AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchAll } from '@/lib/reports/helpers';
 import { ColumnChart, BarList, type Datum } from '@/components/charts/SimpleCharts';
 import { formatMoney, toDateKey, downloadCsv, MODES_PAIEMENT, capitalize, titreSoignant } from '@/lib/format';
 
@@ -46,16 +49,24 @@ const countBy = <T,>(rows: T[], key: (r: T) => string, value: (r: T) => number =
   return Array.from(map, ([label, v]) => ({ label, value: v }));
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Ligne = any;
+type Donnees = {
+  consultations: Ligne[]; patients: Ligne[]; admissions: Ligne[]; sorties: Ligne[]; paiements: Ligne[];
+  paiementsAssurance: Ligne[]; depenses: Ligne[]; factures: Ligne[]; rdvs: Ligne[]; analyses: Ligne[]; lits: Ligne[];
+};
+
 export default function StatistiquesPage() {
+  const { profile } = useAuth();
+  // Les dépenses ne sont lisibles que par l'administration (politique depenses_select)
+  const voitDepenses = profile?.role === 'super_admin' || profile?.role === 'admin';
   const [periode, setPeriode] = useState<Periode>('mois');
   const [debut, setDebut] = useState('');
   const [fin, setFin] = useState('');
   const [loading, setLoading] = useState(true);
   const [showTable, setShowTable] = useState(false);
-  const [data, setData] = useState<{
-    consultations: any[]; patients: any[]; admissions: any[]; sorties: any[]; paiements: any[];
-    factures: any[]; rdvs: any[]; analyses: any[]; lits: any[];
-  } | null>(null);
+  const [data, setData] = useState<Donnees | null>(null);
+  const [erreurs, setErreurs] = useState<string[]>([]);
 
   const { from, to } = useMemo(() => rangeFor(periode, debut, fin), [periode, debut, fin]);
 
@@ -63,23 +74,30 @@ export default function StatistiquesPage() {
     setLoading(true);
     const f = from.toISOString();
     const t = to.toISOString();
-    const [c, p, adm, sor, pay, fac, rdv, lab, lits] = await Promise.all([
-      supabase.from('consultations').select('id, date_consultation, diagnostic_principal, statut, medecin_id, personnel(nom, prenom, role)').gte('date_consultation', f).lte('date_consultation', t),
-      supabase.from('patients').select('id, created_at, sexe').gte('created_at', f).lte('created_at', t),
-      supabase.from('hospitalisations').select('id, date_admission, type_admission').gte('date_admission', f).lte('date_admission', t),
-      supabase.from('hospitalisations').select('id, date_admission, date_sortie, statut').gte('date_sortie', f).lte('date_sortie', t),
-      supabase.from('paiements').select('montant, mode_paiement, date_paiement').gte('date_paiement', f).lte('date_paiement', t),
-      supabase.from('factures').select('montant_total, montant_assurance, montant_patient, statut, date_facture').gte('date_facture', f).lte('date_facture', t),
-      supabase.from('rendez_vous').select('statut, date_heure').gte('date_heure', f).lte('date_heure', t),
-      supabase.from('analyses_laboratoire').select('type_analyse, statut, date_demande').gte('date_demande', f).lte('date_demande', t),
-      supabase.from('lits').select('statut'),
+    // Chargement page par page (Supabase plafonne chaque requête à 1 000 lignes).
+    // Une source en échec est signalée sans bloquer les autres.
+    const echecs: string[] = [];
+    const charger = (libelle: string, query: Parameters<typeof fetchAll>[0]) =>
+      fetchAll(query).catch(() => { echecs.push(libelle); return [] as Ligne[]; });
+    const [consultations, patients, admissions, sorties, paiements, paiementsAssurance, depenses, factures, rdvs, analyses, lits] = await Promise.all([
+      charger('consultations', (a, b) => supabase.from('consultations').select('id, date_consultation, diagnostic_principal, statut, medecin_id, personnel(nom, prenom, role)').gte('date_consultation', f).lte('date_consultation', t).neq('statut', 'annulée').range(a, b)),
+      charger('patients', (a, b) => supabase.from('patients').select('id, created_at, sexe').gte('created_at', f).lte('created_at', t).range(a, b)),
+      charger('admissions', (a, b) => supabase.from('hospitalisations').select('id, date_admission, type_admission').gte('date_admission', f).lte('date_admission', t).range(a, b)),
+      charger('sorties', (a, b) => supabase.from('hospitalisations').select('id, date_admission, date_sortie, statut').gte('date_sortie', f).lte('date_sortie', t).range(a, b)),
+      charger('paiements de la caisse', (a, b) => supabase.from('paiements').select('montant, mode_paiement, date_paiement').gte('date_paiement', f).lte('date_paiement', t).range(a, b)),
+      charger('règlements des assurances', (a, b) => supabase.from('paiements_assurance').select('montant, mode_paiement, date_paiement').eq('statut', 'validé').gte('date_paiement', f).lte('date_paiement', t).range(a, b)),
+      voitDepenses
+        ? charger('dépenses', (a, b) => supabase.from('depenses').select('montant, date_depense').eq('statut', 'validée').gte('date_depense', f).lte('date_depense', t).range(a, b))
+        : Promise.resolve([] as Ligne[]),
+      charger('factures', (a, b) => supabase.from('factures').select('montant_total, montant_assurance, montant_patient, statut, date_facture').gte('date_facture', f).lte('date_facture', t).range(a, b)),
+      charger('rendez-vous', (a, b) => supabase.from('rendez_vous').select('statut, date_heure').gte('date_heure', f).lte('date_heure', t).range(a, b)),
+      charger('analyses', (a, b) => supabase.from('analyses_laboratoire').select('type_analyse, statut, date_demande').gte('date_demande', f).lte('date_demande', t).neq('statut', 'annulé').range(a, b)),
+      charger('lits', (a, b) => supabase.from('lits').select('statut').range(a, b)),
     ]);
-    setData({
-      consultations: c.data || [], patients: p.data || [], admissions: adm.data || [], sorties: sor.data || [],
-      paiements: pay.data || [], factures: fac.data || [], rdvs: rdv.data || [], analyses: lab.data || [], lits: lits.data || [],
-    });
+    setData({ consultations, patients, admissions, sorties, paiements, paiementsAssurance, depenses, factures, rdvs, analyses, lits });
+    setErreurs(echecs);
     setLoading(false);
-  }, [from, to]);
+  }, [from, to, voitDepenses]);
 
   useEffect(() => {
     load();
@@ -87,7 +105,12 @@ export default function StatistiquesPage() {
 
   const stats = useMemo(() => {
     if (!data) return null;
-    const encaisse = data.paiements.reduce((s, p) => s + Number(p.montant || 0), 0);
+    // Encaissements = paiements reçus à la caisse + règlements des assurances
+    const encaissements = [...data.paiements, ...data.paiementsAssurance];
+    const encaisseCaisse = data.paiements.reduce((s, p) => s + Number(p.montant || 0), 0);
+    const encaisseAssurance = data.paiementsAssurance.reduce((s, p) => s + Number(p.montant || 0), 0);
+    const encaisse = encaisseCaisse + encaisseAssurance;
+    const depenses = data.depenses.reduce((s, d) => s + Number(d.montant || 0), 0);
     const facturesValides = data.factures.filter((f) => f.statut !== 'annulée');
     const facture = facturesValides.reduce((s, f) => s + Number(f.montant_total || 0), 0);
     const partAssurance = facturesValides.reduce((s, f) => s + Number(f.montant_assurance || 0), 0);
@@ -106,7 +129,7 @@ export default function StatistiquesPage() {
       const cur = new Date(from.getFullYear(), from.getMonth(), 1);
       while (cur <= to) {
         const key = `${cur.getFullYear()}-${cur.getMonth()}`;
-        const value = data.paiements.filter((p) => { const d = new Date(p.date_paiement); return `${d.getFullYear()}-${d.getMonth()}` === key; }).reduce((s, p) => s + Number(p.montant || 0), 0);
+        const value = encaissements.filter((p) => { const d = new Date(p.date_paiement); return `${d.getFullYear()}-${d.getMonth()}` === key; }).reduce((s, p) => s + Number(p.montant || 0), 0);
         buckets.push({ label: cur.toLocaleDateString('fr-FR', { month: 'short' }), hint: cur.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }), value });
         cur.setMonth(cur.getMonth() + 1);
       }
@@ -114,7 +137,7 @@ export default function StatistiquesPage() {
       for (let i = 0; i < days; i++) {
         const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i);
         const key = toDateKey(d);
-        const value = data.paiements.filter((p) => toDateKey(p.date_paiement) === key).reduce((s, p) => s + Number(p.montant || 0), 0);
+        const value = encaissements.filter((p) => toDateKey(p.date_paiement) === key).reduce((s, p) => s + Number(p.montant || 0), 0);
         buckets.push({ label: String(d.getDate()), hint: d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }), value });
       }
     }
@@ -125,6 +148,10 @@ export default function StatistiquesPage() {
       admissions: data.admissions.length,
       sorties: data.sorties.length,
       encaisse,
+      encaisseCaisse,
+      encaisseAssurance,
+      depenses,
+      solde: encaisse - depenses,
       facture,
       partAssurance,
       nbFactures: facturesValides.length,
@@ -134,10 +161,10 @@ export default function StatistiquesPage() {
       analyses: data.analyses.length,
       encaissementsSerie: buckets,
       parMois,
-      parMode: countBy(data.paiements, (p) => MODES_PAIEMENT[p.mode_paiement] || capitalize(p.mode_paiement), (p) => Number(p.montant || 0)),
+      parMode: countBy(encaissements, (p) => MODES_PAIEMENT[p.mode_paiement] || capitalize(p.mode_paiement), (p) => Number(p.montant || 0)),
       parMedecin: countBy(data.consultations, (c) => (c.personnel ? `${titreSoignant(c.personnel.role)}${c.personnel.prenom} ${c.personnel.nom}` : 'Non attribué')),
       diagnostics: countBy(data.consultations.filter((c) => c.diagnostic_principal), (c) => String(c.diagnostic_principal).trim()),
-      examens: countBy(data.analyses.filter((a) => a.statut !== 'annulé'), (a) => a.type_analyse),
+      examens: countBy(data.analyses, (a) => a.type_analyse),
     };
   }, [data, from, to]);
 
@@ -158,7 +185,10 @@ export default function StatistiquesPage() {
       ['Factures émises', stats.nbFactures],
       ['Montant facturé (FC)', Math.round(stats.facture)],
       ['Part assurance (FC)', Math.round(stats.partAssurance)],
-      ['Encaissements (FC)', Math.round(stats.encaisse)],
+      ['Encaissements caisse (FC)', Math.round(stats.encaisseCaisse)],
+      ['Règlements des assurances (FC)', Math.round(stats.encaisseAssurance)],
+      ['Encaissements totaux (FC)', Math.round(stats.encaisse)],
+      ...(voitDepenses ? [['Dépenses (FC)', Math.round(stats.depenses)], ['Solde (FC)', Math.round(stats.solde)]] : []),
       [],
       ['Encaissements par mode de paiement'],
       ...stats.parMode.map((d) => [d.label, Math.round(d.value)]),
@@ -179,8 +209,12 @@ export default function StatistiquesPage() {
     { label: 'Consultations', value: stats.consultations, icon: <Stethoscope size={22} />, color: 'blue' },
     { label: 'Nouveaux patients', value: stats.nouveauxPatients, icon: <UserPlus size={22} />, color: 'teal' },
     { label: 'Admissions', value: stats.admissions, icon: <BedDouble size={22} />, color: 'orange', sub: `${stats.sorties} sortie(s) • DMS ${stats.dms.toFixed(1).replace('.', ',')} j` },
-    { label: 'Encaissements', value: formatMoney(stats.encaisse), icon: <Banknote size={22} />, color: 'green', sub: `Facturé : ${formatMoney(stats.facture)}` },
-    { label: 'Factures émises', value: stats.nbFactures, icon: <Receipt size={22} />, color: 'purple', sub: `Part assurance : ${formatMoney(stats.partAssurance)}` },
+    { label: 'Encaissements', value: formatMoney(stats.encaisse), icon: <Banknote size={22} />, color: 'green', sub: `Caisse : ${formatMoney(stats.encaisseCaisse)} • Assurances : ${formatMoney(stats.encaisseAssurance)}` },
+    ...(voitDepenses ? [
+      { label: 'Dépenses', value: formatMoney(stats.depenses), icon: <Wallet size={22} />, color: 'red', sub: 'Dépenses validées' },
+      { label: 'Solde', value: formatMoney(stats.solde), icon: <Scale size={22} />, color: stats.solde < 0 ? 'red' : 'teal', sub: 'Encaissements − dépenses' },
+    ] : []),
+    { label: 'Factures émises', value: stats.nbFactures, icon: <Receipt size={22} />, color: 'purple', sub: `Facturé : ${formatMoney(stats.facture)} • Part assurance : ${formatMoney(stats.partAssurance)}` },
     { label: "Taux d'occupation", value: `${stats.occupation} %`, icon: <TrendingUp size={22} />, color: 'blue', sub: 'Lits occupés actuellement' },
     { label: 'Absentéisme RDV', value: `${stats.absenteisme} %`, icon: <CalendarX size={22} />, color: 'red', sub: 'Absents / RDV passés' },
     { label: 'Analyses demandées', value: stats.analyses, icon: <FlaskConical size={22} />, color: 'purple' },
@@ -210,6 +244,12 @@ export default function StatistiquesPage() {
           )}
         </div>
       </div>
+
+      {erreurs.length > 0 && !loading && (
+        <div className="alert alert-danger" style={{ marginBottom: 20 }}>
+          <AlertTriangle size={18} /> Certaines données n&apos;ont pas pu être chargées ({erreurs.join(', ')}) : les chiffres correspondants sont incomplets.
+        </div>
+      )}
 
       {loading || !stats ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Loader2 size={24} className="animate-spin" /></div>
