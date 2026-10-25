@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Search, Loader2, Edit, AlertTriangle, Save, Inbox, BookOpen, Lock } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Loader2, Edit, AlertTriangle, Save, Inbox, BookOpen, Lock, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import Pagination from '@/components/ui/Pagination';
@@ -23,6 +23,8 @@ export default function TarifsPage() {
   const { profile } = useAuth();
   // Seuls les administrateurs gèrent le catalogue ; les autres le consultent
   const canEdit = profile?.role === 'super_admin' || profile?.role === 'admin';
+  // La suppression d'un tarif est réservée au super administrateur
+  const canDelete = profile?.role === 'super_admin';
 
   const [actes, setActes] = useState<ActeTarif[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +96,28 @@ export default function TarifsPage() {
       return;
     }
     setActes((prev) => prev.map((a) => (a.id === acte.id ? { ...a, actif: !a.actif } : a)));
+  };
+
+  const handleDelete = async (acte: ActeTarif) => {
+    if (!canDelete) return;
+    const ok = await confirm({
+      title: 'Supprimer ce tarif',
+      message: `« ${acte.libelle} » (${acte.code}) sera définitivement retiré du catalogue. Les factures existantes ne changent pas.`,
+      confirmText: 'Supprimer',
+      type: 'danger',
+    });
+    if (!ok) return;
+    const { data, error } = await supabase.from('actes_tarifs').delete().eq('id', acte.id).select('id');
+    if (error) {
+      toast.error(explainDbError(error));
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error("Suppression refusée : seul le super administrateur peut supprimer un tarif.");
+      return;
+    }
+    toast.success('Tarif supprimé.');
+    setActes((prev) => prev.filter((a) => a.id !== acte.id));
   };
 
   const filtered = actes.filter((a) => {
@@ -194,6 +218,11 @@ export default function TarifsPage() {
                       <button className="btn btn-ghost btn-sm" onClick={() => setForm({ id: a.id, code: a.code, libelle: a.libelle, categorie: a.categorie, prix: Number(a.prix), actif: a.actif })}>
                         <Edit size={14} /> Modifier
                       </button>
+                      {canDelete && (
+                        <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(a)} title="Supprimer" style={{ color: 'var(--danger)' }}>
+                          <Trash2 size={14} /> Supprimer
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>
