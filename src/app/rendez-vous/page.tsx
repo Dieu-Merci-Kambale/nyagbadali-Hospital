@@ -34,7 +34,7 @@ import { hasAccess, roleLabels } from '@/lib/role-permissions';
 import { buildAppointmentDocumentPdf } from '@/lib/document-models';
 import { nextQueueNumber } from '@/lib/rdv';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
-import { RDV_STATUTS, RDV_TYPES, statusBadge, formatDate, formatTime, toDateKey, explainDbError } from '@/lib/format';
+import { RDV_STATUTS, RDV_TYPES, statusBadge, formatDate, formatTime, toDateKey, explainDbError, titreSoignant } from '@/lib/format';
 
 export default function RendezVousPage() {
   const router = useRouter();
@@ -64,7 +64,7 @@ export default function RendezVousPage() {
     if (!silencieux) setLoading(true);
     const { data, error } = await supabase
       .from('rendez_vous')
-      .select('*, patients(id, nom, prenom, code_patient, date_naissance, sexe, telephone), personnel(id, nom, prenom, specialite)')
+      .select('*, patients(id, nom, prenom, code_patient, date_naissance, sexe, telephone), personnel(id, nom, prenom, specialite, role)')
       .order('date_heure', { ascending: false });
 
     if (error) {
@@ -326,7 +326,7 @@ export default function RendezVousPage() {
                           <div style={{ fontWeight: 600 }}>{rdv.patients?.prenom} {rdv.patients?.nom}</div>
                           <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>{rdv.patients?.code_patient}{rdv.patients?.telephone ? ` • ${rdv.patients.telephone}` : ''}</div>
                         </td>
-                        <td>Dr. {rdv.personnel?.prenom} {rdv.personnel?.nom}</td>
+                        <td>{titreSoignant(rdv.personnel?.role)}{rdv.personnel?.prenom} {rdv.personnel?.nom}</td>
                         <td style={{ maxWidth: 220 }}>
                           <div>{rdv.motif}</div>
                           <span className={`badge ${rdv.type === 'urgence' ? 'badge-danger' : 'badge-info'}`} style={{ marginTop: 4 }}>{RDV_TYPES[rdv.type] || rdv.type}</span>
@@ -405,7 +405,7 @@ export default function RendezVousPage() {
                           <div style={{ fontWeight: 600 }}>{rdv.patients?.prenom} {rdv.patients?.nom}</div>
                           <div style={{ fontSize: 11, color: 'var(--neutral-400)' }}>{rdv.patients?.code_patient}</div>
                         </td>
-                        <td>Dr. {rdv.personnel?.prenom} {rdv.personnel?.nom}</td>
+                        <td>{titreSoignant(rdv.personnel?.role)}{rdv.personnel?.prenom} {rdv.personnel?.nom}</td>
                         <td>
                           <div style={{ fontWeight: 600 }}>{formatDate(rdv.date_heure)}</div>
                           <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>

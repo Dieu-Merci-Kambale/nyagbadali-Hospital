@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { explainDbError } from '@/lib/format';
+import { explainDbError, titreSoignant } from '@/lib/format';
 import type { ColType, Period, PeriodMode, ReportCell } from './types';
 
 // =====================================================
@@ -150,7 +150,7 @@ export function formatCell(value: ReportCell, type: ColType = 'text'): string {
 // =====================================================
 
 export const nom = (p: any) => (p ? `${p.prenom || ''} ${String(p.nom || '').toUpperCase()}`.trim() : '—');
-export const docteur = (p: any) => (p ? `Dr ${nom(p)}` : '—');
+export const docteur = (p: any) => (p ? `${titreSoignant(p.role)}${nom(p)}` : '—');
 export const sum = <T,>(rows: T[], f: (r: T) => number) => rows.reduce((s, r) => s + (Number(f(r)) || 0), 0);
 export const ratio = (a: number, b: number) => (b > 0 ? a / b : 0);
 

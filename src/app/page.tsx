@@ -22,7 +22,7 @@ import { hasAccess } from '@/lib/role-permissions';
 import { totalDepenses } from '@/lib/depenses';
 import { ColumnChart, type Datum } from '@/components/charts/SimpleCharts';
 import {
-  formatMoney, formatDate, formatTime, toDateKey, startOfDayISO, endOfDayISO, statusBadge, RDV_STATUTS, LAB_STATUTS,
+  formatMoney, formatDate, formatTime, toDateKey, startOfDayISO, endOfDayISO, statusBadge, RDV_STATUTS, LAB_STATUTS, titreSoignant,
 } from '@/lib/format';
 
 interface StatCard {
@@ -81,7 +81,7 @@ export default function DashboardPage() {
 
       let agendaQuery = supabase
         .from('rendez_vous')
-        .select('id, date_heure, motif, statut, numero_queue, medecin_id, patients(nom, prenom), personnel(nom)')
+        .select('id, date_heure, motif, statut, numero_queue, medecin_id, patients(nom, prenom), personnel(nom, role)')
         .gte('date_heure', debutJour)
         .lte('date_heure', finJour)
         .order('date_heure');
@@ -251,7 +251,7 @@ export default function DashboardPage() {
                           <td style={{ fontWeight: 700, width: 70 }}>{formatTime(r.date_heure)}</td>
                           <td>
                             <div style={{ fontWeight: 600 }}>{r.patients?.prenom} {r.patients?.nom}</div>
-                            <div style={{ fontSize: 11, color: 'var(--neutral-500)' }}>{r.motif}{!isMedecin && r.personnel ? ` • Dr. ${r.personnel.nom}` : ''}</div>
+                            <div style={{ fontSize: 11, color: 'var(--neutral-500)' }}>{r.motif}{!isMedecin && r.personnel ? ` • ${titreSoignant(r.personnel.role)}${r.personnel.nom}` : ''}</div>
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             {r.numero_queue && <span className="badge badge-info" style={{ marginRight: 6 }}>N° {r.numero_queue}</span>}

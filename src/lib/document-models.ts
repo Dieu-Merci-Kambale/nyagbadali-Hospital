@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import { ETATS_CIVILS } from '@/lib/format';
+import { ETATS_CIVILS, titreSoignant } from '@/lib/format';
 
 // =====================================================
 // Types des modèles de documents
@@ -149,8 +149,10 @@ function fullName(person: any, upperLast = true) {
 
 function doctorName(person: any) {
   const name = fullName(person);
-  return name ? `Dr ${name}` : 'Médecin non renseigné';
+  return name ? `${titreSoignant(person.role)}${name}` : 'Médecin non renseigné';
 }
+
+const estInfirmier = (person: any) => Boolean(person?.role?.startsWith('infirmier'));
 
 function computeAge(dateNaissance?: string) {
   if (!dateNaissance) return null;
@@ -965,7 +967,7 @@ export async function buildConsultationDocumentPdf(model: ConsultationDocumentMo
     title: 'COMPTE RENDU DE CONSULTATION',
     meta: `N° ${ref}   •   ${capitalize(formatDate(consultation.date_consultation, 'full'))} à ${formatTime(consultation.date_consultation)}`,
     service: 'Service de consultation',
-    right: { heading: doctorName(medecin), sub: medecin.specialite || 'Médecine générale', caption: 'Médecin consultant' },
+    right: { heading: doctorName(medecin), sub: medecin.specialite || 'Médecine générale', caption: estInfirmier(medecin) ? 'Infirmier consultant' : 'Médecin consultant' },
     shortTitle: 'Compte rendu de consultation',
     reference: `${fullName(patient)}  •  N° ${ref}`,
   });
@@ -1031,7 +1033,7 @@ export async function buildConsultationDocumentPdf(model: ConsultationDocumentMo
     { emptyText: 'Aucun médicament prescrit lors de cette consultation.' }
   );
 
-  kit.signatures([{ title: 'Signature et cachet du médecin', name: doctorName(medecin) }], {
+  kit.signatures([{ title: estInfirmier(medecin) ? "Signature de l'infirmier" : 'Signature et cachet du médecin', name: doctorName(medecin) }], {
     leftNote: [`Fait le ${formatDate(consultation.date_consultation, 'long')}`, `Réf. ${ref}`],
   });
 
@@ -1761,7 +1763,7 @@ export async function buildPrescriptionDocumentPdf(model: PrescriptionDocumentMo
     kit.y = y + 6;
   });
 
-  kit.signatures([{ title: 'Signature et cachet du médecin', name: doctorName(medecin) }], {
+  kit.signatures([{ title: estInfirmier(medecin) ? "Signature de l'infirmier" : 'Signature et cachet du médecin', name: doctorName(medecin) }], {
     leftNote: [
       `Fait le ${formatDate(ordDate, 'long')}`,
       `${items.length} médicament${items.length > 1 ? 's' : ''} prescrit${items.length > 1 ? 's' : ''}`,

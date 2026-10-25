@@ -15,7 +15,7 @@ import { roleLabels, canProcessLab } from '@/lib/role-permissions';
 import { buildLaboratoryDocumentPdf } from '@/lib/document-models';
 import { parametresModele } from '@/lib/lab-catalogue';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
-import { LAB_STATUTS, statusBadge, formatDateTime, getAge, explainDbError } from '@/lib/format';
+import { LAB_STATUTS, statusBadge, formatDateTime, getAge, explainDbError, titreSoignant } from '@/lib/format';
 import type { ParametreAnalyse } from '@/types';
 
 const STEPS = [
@@ -53,7 +53,7 @@ export default function AnalyseDetailPage() {
       .select(`
         *,
         patients(*),
-        personnel!analyses_laboratoire_medecin_prescripteur_id_fkey(nom, prenom, specialite),
+        personnel!analyses_laboratoire_medecin_prescripteur_id_fkey(nom, prenom, specialite, role),
         technicien:personnel!analyses_laboratoire_technicien_id_fkey(nom, prenom),
         acte:actes_tarifs(parametres)
       `)
@@ -429,7 +429,7 @@ export default function AnalyseDetailPage() {
             <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
               <div>
                 <div style={{ color: 'var(--neutral-400)', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>Prescripteur</div>
-                {analyse.personnel ? `Dr. ${analyse.personnel.prenom} ${analyse.personnel.nom}` : '—'}
+                {analyse.personnel ? `${titreSoignant(analyse.personnel.role)}${analyse.personnel.prenom} ${analyse.personnel.nom}` : '—'}
               </div>
               <div>
                 <div style={{ color: 'var(--neutral-400)', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>Technicien</div>

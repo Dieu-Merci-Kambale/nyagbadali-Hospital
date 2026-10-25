@@ -238,7 +238,7 @@ export const PHARMACIE_REPORTS: ReportDefinition[] = [
     run: async () => {
       const [pres, meds] = await Promise.all([
         fetchAll((a, b) => supabase.from('prescriptions')
-          .select('created_at, nom_medicament, dosage, frequence, duree, medicament_id, consultations(patients(nom, prenom, code_patient), personnel(nom, prenom))')
+          .select('created_at, nom_medicament, dosage, frequence, duree, medicament_id, consultations(patients(nom, prenom, code_patient), personnel(nom, prenom, role))')
           .eq('statut', 'active').order('created_at').range(a, b)),
         fetchAll((a, b) => supabase.from('medicaments').select('id, nom_commercial, stock_actuel').range(a, b)),
       ]);

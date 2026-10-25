@@ -22,7 +22,7 @@ export const LAB_REPORTS: ReportDefinition[] = [
     run: async ({ period }) => {
       const p = period!;
       const demandes = await fetchAll((a, b) => supabase.from('demandes_laboratoire')
-        .select('numero, date_demande, urgent, patients(nom, prenom, code_patient), personnel!demandes_laboratoire_medecin_prescripteur_id_fkey(nom, prenom), analyses_laboratoire(type_analyse, statut)')
+        .select('numero, date_demande, urgent, patients(nom, prenom, code_patient), personnel!demandes_laboratoire_medecin_prescripteur_id_fkey(nom, prenom, role), analyses_laboratoire(type_analyse, statut)')
         .gte('date_demande', iso(p.from)).lte('date_demande', iso(p.to)).order('date_demande').range(a, b));
       const examens = demandes.flatMap((d: any) => d.analyses_laboratoire || []).filter((a: any) => a.statut !== 'annulé');
       return {
@@ -112,7 +112,7 @@ export const LAB_REPORTS: ReportDefinition[] = [
     run: async ({ period }) => {
       const p = period!;
       const analyses = (await fetchAll((a, b) => supabase.from('analyses_laboratoire')
-        .select('date_resultat, type_analyse, resultats, patients(nom, prenom, code_patient), personnel!analyses_laboratoire_medecin_prescripteur_id_fkey(nom, prenom)')
+        .select('date_resultat, type_analyse, resultats, patients(nom, prenom, code_patient), personnel!analyses_laboratoire_medecin_prescripteur_id_fkey(nom, prenom, role)')
         .eq('statut', 'terminé').gte('date_resultat', iso(p.from)).lte('date_resultat', iso(p.to)).order('date_resultat').range(a, b)))
         .filter((a: any) => (a.resultats?.parametres || []).some((x: any) => x.anormal));
       return {

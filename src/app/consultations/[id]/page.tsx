@@ -18,7 +18,7 @@ import { roleLabels, hasAccess } from '@/lib/role-permissions';
 import { buildConsultationDocumentPdf, buildPrescriptionDocumentPdf } from '@/lib/document-models';
 import MedicalAlerts from '@/components/patients/MedicalAlerts';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
-import { LAB_STATUTS, statusBadge, toDateKey, formatDateTime } from '@/lib/format';
+import { LAB_STATUTS, statusBadge, toDateKey, formatDateTime, titreSoignant } from '@/lib/format';
 
 const sectionTitle: React.CSSProperties = { fontSize: 12, textTransform: 'uppercase', color: 'var(--neutral-400)', fontWeight: 600, marginBottom: 8 };
 
@@ -42,7 +42,7 @@ export default function ConsultationDetailsPage() {
       .select(`
         *,
         patients (id, nom, prenom, code_patient, date_naissance, sexe),
-        personnel (nom, prenom, specialite)
+        personnel (nom, prenom, specialite, role)
       `)
       .eq('id', id)
       .single();
@@ -442,11 +442,11 @@ export default function ConsultationDetailsPage() {
           </div>
 
           <div className="card">
-            <div className="card-header"><span className="card-title">Médecin traitant</span></div>
+            <div className="card-header"><span className="card-title">{consultation.personnel?.role?.startsWith('infirmier') ? 'Infirmier consultant' : 'Médecin traitant'}</span></div>
             <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div className="avatar avatar-purple">Dr</div>
+              <div className="avatar avatar-purple">{titreSoignant(consultation.personnel?.role).trim().replace('.', '') || '—'}</div>
               <div>
-                <div style={{ fontWeight: 600 }}>Dr. {consultation.personnel?.nom} {consultation.personnel?.prenom}</div>
+                <div style={{ fontWeight: 600 }}>{titreSoignant(consultation.personnel?.role)}{consultation.personnel?.nom} {consultation.personnel?.prenom}</div>
                 <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>{consultation.personnel?.specialite}</div>
               </div>
             </div>

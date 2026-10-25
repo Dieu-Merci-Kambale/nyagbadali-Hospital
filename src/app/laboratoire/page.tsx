@@ -22,7 +22,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import Pagination from '@/components/ui/Pagination';
 import { usePagination } from '@/lib/usePagination';
-import { LAB_STATUTS, statusBadge, formatDate, formatTime, explainDbError } from '@/lib/format';
+import { LAB_STATUTS, statusBadge, formatDate, formatTime, explainDbError, titreSoignant } from '@/lib/format';
 import { statutDemande } from '@/lib/lab-catalogue';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,7 +60,7 @@ export default function LaboratoirePage() {
       .select(`
         *,
         patients(nom, prenom, code_patient),
-        personnel!demandes_laboratoire_medecin_prescripteur_id_fkey(nom, prenom),
+        personnel!demandes_laboratoire_medecin_prescripteur_id_fkey(nom, prenom, role),
         analyses_laboratoire(id, type_analyse, statut, urgent, resultats)
       `)
       .order('date_demande', { ascending: false });
@@ -242,7 +242,7 @@ export default function LaboratoirePage() {
                         ))}
                       </div>
                     </td>
-                    <td>{d.personnel ? `Dr. ${d.personnel.prenom} ${d.personnel.nom}` : '—'}</td>
+                    <td>{d.personnel ? `${titreSoignant(d.personnel.role)}${d.personnel.prenom} ${d.personnel.nom}` : '—'}</td>
                     <td style={{ minWidth: 150 }}>
                       <span className={`badge ${st.badge}`}>{st.label}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>

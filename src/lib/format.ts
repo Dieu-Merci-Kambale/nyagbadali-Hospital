@@ -65,6 +65,17 @@ export function getAge(dateNaissance?: string | null): number | null {
   return age;
 }
 
+/**
+ * Titre affiché devant le nom d'un soignant : « Dr. » pour un médecin,
+ * « Inf. » pour un infirmier, rien pour les autres rôles.
+ * Rôle inconnu (non chargé) : « Dr. », comme l'affichage historique.
+ */
+export function titreSoignant(role?: string | null): string {
+  if (!role || role.startsWith('medecin')) return 'Dr. ';
+  if (role.startsWith('infirmier')) return 'Inf. ';
+  return '';
+}
+
 export function capitalize(text?: string | null): string {
   if (!text) return '';
   const t = String(text).replace(/_/g, ' ');

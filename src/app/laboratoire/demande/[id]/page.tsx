@@ -14,7 +14,7 @@ import { roleLabels, hasAccess, canProcessLab, canRequestLab } from '@/lib/role-
 import { buildLabRequestOrderPdf, buildLabRequestReportPdf } from '@/lib/document-models';
 import { useLiveRefresh } from '@/lib/useLiveRefresh';
 import { fetchExamensLabo, statutDemande } from '@/lib/lab-catalogue';
-import { LAB_STATUTS, statusBadge, formatDateTime, getAge, explainDbError, formatMoney } from '@/lib/format';
+import { LAB_STATUTS, statusBadge, formatDateTime, getAge, explainDbError, formatMoney, titreSoignant } from '@/lib/format';
 import Modal from '@/components/ui/Modal';
 import AnalyseCard from '@/components/laboratoire/AnalyseCard';
 import type { ActeTarif } from '@/types';
@@ -54,7 +54,7 @@ export default function DemandeLaboratoirePage() {
     const [{ data: d, error }, { data: a }] = await Promise.all([
       supabase
         .from('demandes_laboratoire')
-        .select('*, patients(*), personnel!demandes_laboratoire_medecin_prescripteur_id_fkey(nom, prenom, specialite)')
+        .select('*, patients(*), personnel!demandes_laboratoire_medecin_prescripteur_id_fkey(nom, prenom, specialite, role)')
         .eq('id', id)
         .single(),
       supabase
@@ -334,7 +334,7 @@ export default function DemandeLaboratoirePage() {
             <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
               <div>
                 <div style={{ color: 'var(--neutral-400)', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>Prescripteur</div>
-                {demande.personnel ? `Dr. ${demande.personnel.prenom} ${demande.personnel.nom}` : '—'}
+                {demande.personnel ? `${titreSoignant(demande.personnel.role)}${demande.personnel.prenom} ${demande.personnel.nom}` : '—'}
               </div>
               <div>
                 <div style={{ color: 'var(--neutral-400)', fontSize: 11, textTransform: 'uppercase', fontWeight: 600 }}>Renseignements cliniques</div>

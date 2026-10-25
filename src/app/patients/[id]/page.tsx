@@ -29,7 +29,7 @@ import {
 import MedicalAlerts from '@/components/patients/MedicalAlerts';
 import { hasAccess, canManagePatients } from '@/lib/role-permissions';
 import {
-  formatMoney, formatDate, formatTime, statusBadge, RDV_STATUTS, RDV_TYPES, HOSP_STATUTS, LAB_STATUTS, FACTURE_STATUTS, ETATS_CIVILS, daysBetween,
+  formatMoney, formatDate, formatTime, statusBadge, RDV_STATUTS, RDV_TYPES, HOSP_STATUTS, LAB_STATUTS, FACTURE_STATUTS, ETATS_CIVILS, daysBetween, titreSoignant,
 } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import Pagination from '@/components/ui/Pagination';
@@ -85,7 +85,7 @@ export default function PatientDossierPage() {
       // Fetch Consultations
       const { data: consultData } = await supabase
         .from('consultations')
-        .select('*, personnel(nom, prenom, specialite)')
+        .select('*, personnel(nom, prenom, specialite, role)')
         .eq('patient_id', id)
         .order('date_consultation', { ascending: false });
         
@@ -94,7 +94,7 @@ export default function PatientDossierPage() {
       // Factures (avec paiements pour calculer le reste à payer), RDV, séjours et analyses
       const [{ data: factureData }, { data: rdvData }, { data: hospData }, { data: labData }] = await Promise.all([
         supabase.from('factures').select('*, paiements(montant)').eq('patient_id', id).order('date_facture', { ascending: false }),
-        supabase.from('rendez_vous').select('*, personnel(nom, prenom, specialite)').eq('patient_id', id).order('date_heure', { ascending: false }),
+        supabase.from('rendez_vous').select('*, personnel(nom, prenom, specialite, role)').eq('patient_id', id).order('date_heure', { ascending: false }),
         supabase.from('hospitalisations').select('*, lits(numero, chambres(numero)), medecin:personnel(nom, prenom)').eq('patient_id', id).order('date_admission', { ascending: false }),
         supabase.from('analyses_laboratoire').select('id, type_analyse, statut, urgent, date_demande, date_resultat, resultats, created_at').eq('patient_id', id).order('date_demande', { ascending: false }),
       ]);
@@ -360,7 +360,7 @@ export default function PatientDossierPage() {
               <div className="card" style={{ padding: 16 }}>
                 <div style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Prochain rendez-vous</div>
                 <div style={{ fontWeight: 700, marginTop: 6 }}>{prochainRdv ? `${formatDate(prochainRdv.date_heure)} à ${formatTime(prochainRdv.date_heure)}` : 'Aucun'}</div>
-                {prochainRdv && <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>Dr. {prochainRdv.personnel?.nom}</div>}
+                {prochainRdv && <div style={{ fontSize: 12, color: 'var(--neutral-500)' }}>{titreSoignant(prochainRdv.personnel?.role)}{prochainRdv.personnel?.nom}</div>}
               </div>
               <div className="card" style={{ padding: 16 }}>
                 <div style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 600, textTransform: 'uppercase' }}>Analyses en attente</div>
@@ -394,7 +394,7 @@ export default function PatientDossierPage() {
                     </div>
                     <div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                        <h3 style={{ fontSize: 15, fontWeight: 700 }}>Dr. {consultations[0].personnel?.nom}</h3>
+                        <h3 style={{ fontSize: 15, fontWeight: 700 }}>{titreSoignant(consultations[0].personnel?.role)}{consultations[0].personnel?.nom}</h3>
                         <span className="badge badge-neutral" style={{ fontSize: 10 }}>{new Date(consultations[0].date_consultation).toLocaleDateString('fr-FR')}</span>
                       </div>
                       <p style={{ fontSize: 13, color: 'var(--neutral-600)', marginBottom: 8 }}>
@@ -448,7 +448,7 @@ export default function PatientDossierPage() {
                         {new Date(c.date_consultation).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </td>
-                    <td>Dr. {c.personnel?.nom} <br/><span style={{ fontSize: 11, color: 'var(--primary-500)' }}>{c.personnel?.specialite}</span></td>
+                    <td>{titreSoignant(c.personnel?.role)}{c.personnel?.nom} <br/><span style={{ fontSize: 11, color: 'var(--primary-500)' }}>{c.personnel?.specialite}</span></td>
                     <td style={{ maxWidth: 200 }}>{c.motif}</td>
                     <td>
                       <span className={`badge ${c.statut === 'terminée' ? 'badge-success' : 'badge-warning'}`}>
@@ -487,7 +487,7 @@ export default function PatientDossierPage() {
                   return (
                     <tr key={r.id}>
                       <td style={{ fontWeight: 600 }}>{formatDate(r.date_heure)}<br /><span style={{ fontSize: 11, color: 'var(--neutral-400)', fontWeight: 400 }}>{formatTime(r.date_heure)}</span></td>
-                      <td>Dr. {r.personnel?.prenom} {r.personnel?.nom}</td>
+                      <td>{titreSoignant(r.personnel?.role)}{r.personnel?.prenom} {r.personnel?.nom}</td>
                       <td style={{ maxWidth: 240 }}>{r.motif}</td>
                       <td><span className="badge badge-info">{RDV_TYPES[r.type] || r.type}</span></td>
                       <td><span className={`badge ${st.badge}`}>{st.label}</span></td>

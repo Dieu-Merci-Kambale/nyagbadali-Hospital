@@ -32,7 +32,7 @@ export const MEDICAL_REPORTS: ReportDefinition[] = [
       }
       const consultations = await fetchAll((a, b) => {
         let q = supabase.from('consultations')
-          .select('date_consultation, motif, diagnostic_principal, statut, patient_id, patients(nom, prenom, code_patient, sexe, date_naissance), personnel(nom, prenom)')
+          .select('date_consultation, motif, diagnostic_principal, statut, patient_id, patients(nom, prenom, code_patient, sexe, date_naissance), personnel(nom, prenom, role)')
           .gte('date_consultation', iso(p.from)).lte('date_consultation', iso(p.to)).order('date_consultation');
         if (moi) q = q.eq('medecin_id', moi);
         return q.range(a, b);
@@ -173,7 +173,7 @@ export const MEDICAL_REPORTS: ReportDefinition[] = [
     run: async ({ period }) => {
       const p = period!;
       const rdvs = await fetchAll((a, b) => supabase.from('rendez_vous')
-        .select('date_heure, duree_minutes, motif, type, statut, numero_queue, patients(nom, prenom, code_patient, telephone), personnel(nom, prenom)')
+        .select('date_heure, duree_minutes, motif, type, statut, numero_queue, patients(nom, prenom, code_patient, telephone), personnel(nom, prenom, role)')
         .gte('date_heure', iso(p.from)).lte('date_heure', iso(p.to)).order('date_heure').range(a, b));
       const passes = rdvs.filter((r: any) => ['terminé', 'absent'].includes(r.statut));
       return {

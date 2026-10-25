@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ColumnChart, BarList, type Datum } from '@/components/charts/SimpleCharts';
-import { formatMoney, toDateKey, downloadCsv, MODES_PAIEMENT, capitalize } from '@/lib/format';
+import { formatMoney, toDateKey, downloadCsv, MODES_PAIEMENT, capitalize, titreSoignant } from '@/lib/format';
 
 type Periode = 'mois' | 'mois_prec' | '7j' | '30j' | 'annee' | 'perso';
 
@@ -64,7 +64,7 @@ export default function StatistiquesPage() {
     const f = from.toISOString();
     const t = to.toISOString();
     const [c, p, adm, sor, pay, fac, rdv, lab, lits] = await Promise.all([
-      supabase.from('consultations').select('id, date_consultation, diagnostic_principal, statut, medecin_id, personnel(nom, prenom)').gte('date_consultation', f).lte('date_consultation', t),
+      supabase.from('consultations').select('id, date_consultation, diagnostic_principal, statut, medecin_id, personnel(nom, prenom, role)').gte('date_consultation', f).lte('date_consultation', t),
       supabase.from('patients').select('id, created_at, sexe').gte('created_at', f).lte('created_at', t),
       supabase.from('hospitalisations').select('id, date_admission, type_admission').gte('date_admission', f).lte('date_admission', t),
       supabase.from('hospitalisations').select('id, date_admission, date_sortie, statut').gte('date_sortie', f).lte('date_sortie', t),
@@ -135,7 +135,7 @@ export default function StatistiquesPage() {
       encaissementsSerie: buckets,
       parMois,
       parMode: countBy(data.paiements, (p) => MODES_PAIEMENT[p.mode_paiement] || capitalize(p.mode_paiement), (p) => Number(p.montant || 0)),
-      parMedecin: countBy(data.consultations, (c) => (c.personnel ? `Dr. ${c.personnel.prenom} ${c.personnel.nom}` : 'Non attribué')),
+      parMedecin: countBy(data.consultations, (c) => (c.personnel ? `${titreSoignant(c.personnel.role)}${c.personnel.prenom} ${c.personnel.nom}` : 'Non attribué')),
       diagnostics: countBy(data.consultations.filter((c) => c.diagnostic_principal), (c) => String(c.diagnostic_principal).trim()),
       examens: countBy(data.analyses.filter((a) => a.statut !== 'annulé'), (a) => a.type_analyse),
     };
