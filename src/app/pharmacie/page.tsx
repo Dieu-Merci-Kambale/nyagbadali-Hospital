@@ -23,6 +23,7 @@ import {
   Lock,
   Download,
   FileSpreadsheet,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,6 +55,8 @@ export default function PharmacieHubPage() {
   // Séparation des tâches : seuls le super administrateur et l'administrateur gèrent le stock
   // (entrées, ajustements, retraits, fiches). Le pharmacien délivre les ordonnances.
   const canManageStock = profile?.role === 'super_admin' || profile?.role === 'admin';
+  // La suppression d'une fiche médicament est réservée au super administrateur
+  const canDelete = profile?.role === 'super_admin';
   const RESERVE = "Accès refusé : opération réservée au super administrateur et à l'administrateur";
   // Apparence uniforme des boutons verrouillés (grisés, sans effet au survol)
   const lockedStyle: React.CSSProperties = canManageStock ? {} : {
@@ -243,6 +246,44 @@ export default function PharmacieHubPage() {
     toast.success(`Stock de ${med.nom_commercial} : ${res?.stock_avant ?? med.stock_actuel} → ${res?.stock_apres ?? '?'}`);
     setStockForm(null);
     loadData();
+  };
+
+  const handleDelete = async (med: Medicament) => {
+    if (!canDelete) return;
+
+    // Un médicament déjà prescrit ne peut pas être supprimé (contrôle aussi fait côté base)
+    const [parId, parNom] = await Promise.all([
+      supabase.from('prescriptions').select('id', { count: 'exact', head: true }).eq('medicament_id', med.id),
+      supabase.from('prescriptions').select('id', { count: 'exact', head: true }).ilike('nom_medicament', med.nom_commercial.trim().replace(/[\\%_]/g, '\\$&')),
+    ]);
+    if (parId.error || parNom.error) {
+      toast.error(explainDbError(parId.error || parNom.error));
+      return;
+    }
+    if ((parId.count || 0) + (parNom.count || 0) > 0) {
+      toast.error(`Suppression impossible : « ${med.nom_commercial} » a déjà été prescrit.`);
+      return;
+    }
+
+    const ok = await confirm({
+      title: 'Supprimer ce médicament',
+      message: `« ${med.nom_commercial} » (${med.code}) sera définitivement retiré de l'inventaire, avec son historique de mouvements de stock.`,
+      confirmText: 'Supprimer',
+      type: 'danger',
+    });
+    if (!ok) return;
+
+    const { data, error } = await supabase.from('medicaments').delete().eq('id', med.id).select('id');
+    if (error) {
+      toast.error(explainDbError(error));
+      return;
+    }
+    if (!data || data.length === 0) {
+      toast.error('Suppression refusée : seul le super administrateur peut supprimer un médicament.');
+      return;
+    }
+    toast.success('Médicament supprimé.');
+    setMedicaments((prev) => prev.filter((m) => m.id !== med.id));
   };
 
   // --- LISTES PAGINÉES (10 lignes, plus récentes en premier) ---
@@ -612,6 +653,11 @@ export default function PharmacieHubPage() {
                                   Éditer
                                 </button>
                               )}
+                              {canDelete && (
+                                <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(med)} title="Supprimer" style={{ color: 'var(--danger)' }}>
+                                  <Trash2 size={14} /> Supprimer
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -674,6 +720,11 @@ export default function PharmacieHubPage() {
                           ) : (
                             <button type="button" className="btn btn-sm" disabled aria-disabled="true" title={RESERVE} style={lockedStyle}>
                               Mettre à jour
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(med)} title="Supprimer" style={{ color: 'var(--danger)' }}>
+                              <Trash2 size={14} /> Supprimer
                             </button>
                           )}
                         </div>
