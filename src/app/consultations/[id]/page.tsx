@@ -264,6 +264,13 @@ export default function ConsultationDetailsPage() {
                 </div>
               )}
 
+              {consultation.complement_anamnese && (
+                <div style={{ marginBottom: 20 }}>
+                  <h4 style={sectionTitle}>Complément d&apos;anamnèse</h4>
+                  <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{consultation.complement_anamnese}</p>
+                </div>
+              )}
+
               {consultation.examen_physique?.texte && (
                 <div style={{ marginBottom: 20 }}>
                   <h4 style={sectionTitle}>Examen physique</h4>
@@ -301,7 +308,7 @@ export default function ConsultationDetailsPage() {
             <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span className="card-title">Ordonnance & prescriptions</span>
               <Link href={`/consultations/${consultation.id}/prescriptions/nouvelle`} className="btn btn-primary btn-sm">
-                + Prescrire un médicament
+                + Prescrire des médicaments
               </Link>
             </div>
             {ordonnanceDates.length > 0 && (

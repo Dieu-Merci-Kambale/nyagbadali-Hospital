@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS consultations (
     date_consultation TIMESTAMPTZ DEFAULT NOW(),
     motif TEXT NOT NULL,
     anamnese TEXT,
+    complement_anamnese TEXT,
     examen_physique JSONB,
     diagnostic_principal VARCHAR(10), -- Code ICD-10/11
     diagnostics_secondaires TEXT[],

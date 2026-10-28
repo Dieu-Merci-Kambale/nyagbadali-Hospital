@@ -12,6 +12,7 @@ export type ClinicalDefaults = {
   constantes?: Record<string, any> | null;
   motif?: string;
   anamnese?: string | null;
+  complement_anamnese?: string | null;
   examen_physique?: { texte?: string } | null;
   diagnostic_principal?: string | null;
   plan_traitement?: string | null;
@@ -40,6 +41,7 @@ export function readClinicalForm(formData: FormData) {
     constantes,
     motif: (formData.get('motif') as string).trim(),
     anamnese: ((formData.get('anamnese') as string) || '').trim() || null,
+    complement_anamnese: ((formData.get('complement_anamnese') as string) || '').trim() || null,
     examen_physique: examen ? { texte: examen } : null,
     diagnostic_principal: ((formData.get('diagnostic_principal') as string) || '').trim() || null,
     plan_traitement: ((formData.get('plan_traitement') as string) || '').trim() || null,
@@ -104,6 +106,11 @@ export default function ClinicalFields({ defaults = {}, allowCancel = false, pat
           <div className="form-group">
             <label className="form-label">Anamnèse (histoire de la maladie, antécédents récents)</label>
             <textarea name="anamnese" className="form-textarea" rows={3} defaultValue={defaults.anamnese || ''} placeholder="Début des symptômes, évolution, traitements déjà pris..."></textarea>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Complément d&apos;anamnèse</label>
+            <textarea name="complement_anamnese" className="form-textarea" rows={3} defaultValue={defaults.complement_anamnese || ''} placeholder="Informations supplémentaires recueillies auprès du patient ou de son entourage..."></textarea>
           </div>
 
           <div className="form-group">

@@ -1002,6 +1002,11 @@ export async function buildConsultationDocumentPdf(model: ConsultationDocumentMo
     kit.paragraph(consultation.anamnese);
   }
 
+  if (consultation.complement_anamnese) {
+    kit.section("Complément d'anamnèse");
+    kit.paragraph(consultation.complement_anamnese);
+  }
+
   kit.section('Conclusion diagnostique');
   kit.callout('Diagnostic principal', consultation.diagnostic_principal || 'Diagnostic non encore établi', DANGER);
 

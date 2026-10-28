@@ -115,8 +115,9 @@ export default function PatientSearch({ value, onChange, initialPatientId, label
         )}
       </div>
 
+      {/* Résultats dans le flux de la page : ils poussent le formulaire au lieu de le recouvrir */}
       {open && !value && query.trim().length >= 2 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, backgroundColor: 'white', border: '1px solid var(--neutral-200)', borderRadius: 8, marginTop: 4, maxHeight: 240, overflowY: 'auto', boxShadow: 'var(--shadow-lg)' }}>
+        <div style={{ backgroundColor: 'white', border: '1px solid var(--neutral-200)', borderRadius: 8, marginTop: 4, maxHeight: 240, overflowY: 'auto' }}>
           {searching ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, color: 'var(--neutral-500)' }}>
               <Loader2 size={16} className="animate-spin" /> Recherche…

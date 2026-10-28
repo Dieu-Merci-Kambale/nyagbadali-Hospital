@@ -271,7 +271,7 @@ export const ADMIN_REPORTS: ReportDefinition[] = [
         allergies: 'Allergies', antecedents: 'Antécédents', numero_queue: 'Ticket', duree_minutes: 'Durée', type: 'Type',
         quantite: 'Quantité', description: 'Description', libelle: 'Libellé', actif: 'Actif', urgent: 'Urgent', lit_id: 'Lit',
         medecin_id: 'Médecin', medecin_responsable_id: 'Médecin responsable', technicien_id: 'Technicien', notes_privees: 'Notes du médecin',
-        plan_traitement: 'Conduite à tenir', anamnese: 'Anamnèse', examen_physique: 'Examen physique', constantes: 'Constantes',
+        plan_traitement: 'Conduite à tenir', anamnese: 'Anamnèse', complement_anamnese: "Complément d'anamnèse", examen_physique: 'Examen physique', constantes: 'Constantes',
         frequence: 'Fréquence', duree: 'Durée du traitement', dosage: 'Dosage', instructions: 'Instructions', specialite: 'Spécialité',
       };
       const MONTANTS = new Set(['montant', 'montant_total', 'montant_patient', 'montant_assurance', 'prix', 'prix_unitaire']);

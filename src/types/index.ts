@@ -107,6 +107,7 @@ export interface Consultation {
   date_consultation: string;
   motif: string;
   anamnese?: string;
+  complement_anamnese?: string;
   examen_physique?: Record<string, unknown>;
   diagnostic_principal?: string;
   diagnostics_secondaires?: string[];
