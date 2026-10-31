@@ -347,6 +347,59 @@ export interface Depense {
   updated_at: string;
 }
 
+// ===== Demande de modification (correction d'une erreur de saisie) =====
+export type ModuleDemandeModification =
+  | 'patients'
+  | 'rendez_vous'
+  | 'consultations'
+  | 'prescriptions'
+  | 'hospitalisation'
+  | 'laboratoire'
+  | 'pharmacie'
+  | 'facturation'
+  | 'depenses'
+  | 'assurances'
+  | 'personnel'
+  | 'autre';
+
+export type StatutDemandeModification =
+  | 'en_attente_medecin_chef'
+  | 'en_attente_direction'
+  | 'approuvée'
+  | 'rejetée'
+  | 'exécutée';
+
+export interface DemandeModification {
+  id: string;
+  numero: string;
+  module: ModuleDemandeModification;
+  reference_enregistrement?: string | null;
+  date_erreur?: string | null;
+  description_erreur: string;
+  correction_demandee: string;
+  explication: string;
+  mesures_preventives?: string | null;
+  statut: StatutDemandeModification;
+  demandeur_id?: string | null;
+  signature_demandeur: string;
+  date_signature_demandeur: string;
+  medecin_chef_id?: string | null;
+  avis_medecin_chef?: 'favorable' | 'défavorable' | null;
+  commentaire_medecin_chef?: string | null;
+  signature_medecin_chef?: string | null;
+  date_signature_medecin_chef?: string | null;
+  direction_id?: string | null;
+  decision_direction?: 'approuvée' | 'rejetée' | null;
+  commentaire_direction?: string | null;
+  signature_direction?: string | null;
+  date_signature_direction?: string | null;
+  execute_par?: string | null;
+  date_execution?: string | null;
+  note_execution?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ===== Journal d'audit =====
 export interface AuditLog {
   id: number;

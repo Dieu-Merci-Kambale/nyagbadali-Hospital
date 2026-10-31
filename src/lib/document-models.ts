@@ -787,10 +787,10 @@ class DocumentKit {
     this.opacity(1);
   }
 
-  /** Cadres de signature (1 ou 2). */
-  signatures(boxes: { title: string; name?: string }[], options: { leftNote?: string[] } = {}) {
+  /** Cadres de signature (1 à 3), avec l'image de la signature électronique si elle existe. */
+  signatures(boxes: { title: string; name?: string; image?: string | null; caption?: string }[], options: { leftNote?: string[] } = {}) {
     const { doc, margin, contentWidth } = this;
-    const blockH = 38;
+    const blockH = 38 + (boxes.some((b) => b.caption) ? 5 : 0);
     // Le bloc peut remonter sur l'espacement laissé par le bloc précédent
     // Le bloc peut empiéter légèrement sur la marge basse (il reste au-dessus du pied de page)
     if (this.y - 8 + blockH > this.bottom + 4) this.newPage();
@@ -805,18 +805,33 @@ class DocumentKit {
       }
     }
 
-    const boxW = boxes.length === 1 ? 78 : (contentWidth - 12) / 2;
+    const gap = boxes.length > 2 ? 8 : 12;
+    const boxW = boxes.length === 1 ? 78 : (contentWidth - gap * (boxes.length - 1)) / boxes.length;
     boxes.forEach((box, i) => {
-      const x = boxes.length === 1 ? margin + contentWidth - boxW : margin + i * (boxW + 12);
+      const x = boxes.length === 1 ? margin + contentWidth - boxW : margin + i * (boxW + gap);
       this.color(NAVY).font('bold', 7.8);
-      this.spaced(box.title.toUpperCase(), x + boxW / 2, top + 4, 0.3, 'center');
+      this.spaced(box.title.toUpperCase(), x + boxW / 2, top + 4, boxes.length > 2 ? 0.1 : 0.3, 'center');
       this.stroke(LINE, 0.3);
       this.dashed(true, [1.5, 1.2]);
       doc.roundedRect(x, top + 7, boxW, 22, 2, 2);
       this.dashed(false);
+      if (box.image) {
+        // Signature dessinée (600 × 200 px) centrée dans le cadre
+        const imgH = 19;
+        const imgW = Math.min(boxW - 4, imgH * 3);
+        try {
+          doc.addImage(box.image, 'PNG', x + (boxW - imgW) / 2, top + 8.5, imgW, imgW / 3);
+        } catch {
+          // ignore
+        }
+      }
       if (box.name) {
-        this.color(INK).font('bold', 9.5);
-        doc.text(box.name, x + boxW / 2, top + 35, { align: 'center' });
+        this.color(INK).font('bold', boxes.length > 2 ? 8.5 : 9.5);
+        doc.text(box.name, x + boxW / 2, top + 35, { align: 'center', maxWidth: boxW });
+      }
+      if (box.caption) {
+        this.color(MUTED).font('normal', 7);
+        doc.text(box.caption, x + boxW / 2, top + 39.5, { align: 'center', maxWidth: boxW });
       }
     });
     this.y = top + blockH;
@@ -2082,6 +2097,102 @@ export async function buildReleveAssureurPdf(model: ReleveAssureurDocumentModel)
 
   return kit.finish({
     notice: 'Relevé établi à partir des factures, bordereaux et règlements enregistrés à la date d’édition',
+    printedBy,
+    printedAt,
+  });
+}
+
+// =====================================================
+// Fiche de demande de modification (correction d'erreur)
+// =====================================================
+
+export type DemandeModificationDocumentModel = {
+  /** Demande avec demandeur, medecin_chef, direction, executant (personnel) */
+  demande: any;
+  /** Libellé du module concerné */
+  moduleLabel: string;
+  /** Libellé du statut */
+  statutLabel: string;
+  /** Libellés des rôles (role → libellé) */
+  roleLabels: Record<string, string>;
+  printedBy?: PrintedBy;
+  printedAt?: string | Date;
+};
+
+export async function buildDemandeModificationPdf(model: DemandeModificationDocumentModel) {
+  const { demande, moduleLabel, statutLabel, roleLabels, printedBy, printedAt } = model;
+  const kit = await DocumentKit.create();
+  const demandeur = demande?.demandeur || {};
+  const medecinChef = demande?.medecin_chef || {};
+  const direction = demande?.direction || {};
+  const signataire = (p: any) => (p?.nom || p?.prenom ? `${titreSoignant(p.role)}${fullName(p)}` : '');
+  const signeLe = (date?: string | null) => (date ? `Signé le ${formatDateTime(date)}` : 'En attente de signature');
+
+  kit.letterhead({
+    title: 'DEMANDE DE MODIFICATION',
+    meta: `N° ${demande.numero}   •   Déposée le ${formatDate(demande.date_signature_demandeur || demande.created_at, 'long')}   •   ${statutLabel}`,
+    service: 'Contrôle qualité des données',
+    right: {
+      heading: signataire(demandeur) || 'Demandeur',
+      sub: roleLabels[demandeur.role] || '',
+      caption: 'Auteur de l’erreur',
+    },
+    shortTitle: 'Demande de modification',
+    reference: `N° ${demande.numero}`,
+  });
+
+  kit.infoCard([[
+    { label: 'Demandeur', value: fullName(demandeur) || '—', w: 0.3 },
+    { label: 'Fonction', value: roleLabels[demandeur.role] || '—', w: 0.26 },
+    { label: 'Matricule', value: demandeur.code_personnel || '—', w: 0.2 },
+    { label: 'Module concerné', value: moduleLabel, w: 0.24 },
+  ]]);
+
+  kit.section('Erreur à corriger');
+  kit.keyValues([
+    { label: 'Enregistrement concerné', value: demande.reference_enregistrement || '—' },
+    { label: "Date de l'erreur", value: demande.date_erreur ? formatDate(demande.date_erreur, 'long') : '—' },
+  ]);
+  kit.callout('Ce qui a été enregistré par erreur', demande.description_erreur || '—', DANGER);
+  kit.callout('Correction demandée', demande.correction_demandee || '—', SUCCESS);
+
+  kit.section("Explication de l'erreur");
+  kit.paragraph(demande.explication || '—');
+  if (demande.mesures_preventives) {
+    kit.callout('Mesures pour éviter que cela se reproduise', demande.mesures_preventives, ACCENT);
+  }
+
+  kit.section('Avis et décision');
+  kit.callout(
+    'Avis du médecin chef',
+    demande.avis_medecin_chef
+      ? `${capitalize(demande.avis_medecin_chef)}${demande.commentaire_medecin_chef ? ` : ${demande.commentaire_medecin_chef}` : ''}`
+      : demandeur.role === 'medecin_chef' ? 'Sans objet : la demande émane du médecin chef.' : 'En attente.',
+    demande.avis_medecin_chef === 'défavorable' ? DANGER : demande.avis_medecin_chef ? SUCCESS : WARNING,
+  );
+  kit.callout(
+    "Décision de la direction de l'hôpital",
+    demande.decision_direction
+      ? `${capitalize(demande.decision_direction)}${demande.commentaire_direction ? ` : ${demande.commentaire_direction}` : ''}`
+      : demande.statut === 'rejetée' ? 'Sans objet : demande close après avis défavorable.' : 'En attente.',
+    demande.decision_direction === 'rejetée' ? DANGER : demande.decision_direction ? SUCCESS : WARNING,
+  );
+  if (demande.date_execution) {
+    kit.callout(
+      'Correction effectuée dans le système',
+      `Le ${formatDateTime(demande.date_execution)}${demande.executant ? ` par ${fullName(demande.executant)}` : ''}${demande.note_execution ? ` : ${demande.note_execution}` : ''}`,
+      NAVY,
+    );
+  }
+
+  kit.signatures([
+    { title: 'Le demandeur', name: signataire(demandeur) || undefined, image: demande.signature_demandeur, caption: signeLe(demande.date_signature_demandeur) },
+    { title: 'Le médecin chef', name: signataire(medecinChef) || undefined, image: demande.signature_medecin_chef, caption: demande.date_signature_medecin_chef ? signeLe(demande.date_signature_medecin_chef) : demandeur.role === 'medecin_chef' ? 'Sans objet' : signeLe(null) },
+    { title: 'La direction', name: signataire(direction) || undefined, image: demande.signature_direction, caption: signeLe(demande.date_signature_direction) },
+  ]);
+
+  return kit.finish({
+    notice: 'Document interne  •  Toute correction de données doit être approuvée par le médecin chef et la direction',
     printedBy,
     printedAt,
   });

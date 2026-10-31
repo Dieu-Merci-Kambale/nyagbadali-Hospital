@@ -20,6 +20,7 @@ export type AppModule =
   | 'rapports'
   | 'statistiques'
   | 'audit'
+  | 'demandes-modification'
   | 'profil';
 
 // Mapping module → route
@@ -40,6 +41,7 @@ export const moduleRoutes: Record<AppModule, string> = {
   'rapports': '/rapports',
   'statistiques': '/statistiques',
   'audit': '/audit',
+  'demandes-modification': '/demandes-modification',
   'profil': '/profil',
 };
 
@@ -54,39 +56,39 @@ const rolePermissions: Record<RolePersonnel, AppModule[]> = {
   super_admin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
     'chambres', 'pharmacie', 'laboratoire', 'assurances', 'personnel', 'facturation', 'depenses',
-    'departements', 'rapports', 'statistiques', 'audit', 'profil',
+    'departements', 'rapports', 'statistiques', 'audit', 'demandes-modification', 'profil',
   ],
   admin: [
     'dashboard', 'patients', 'rendez-vous', 'pharmacie', 'chambres', 'laboratoire',
-    'assurances', 'personnel', 'facturation', 'depenses', 'departements', 'rapports', 'statistiques', 'audit', 'profil',
+    'assurances', 'personnel', 'facturation', 'depenses', 'departements', 'rapports', 'statistiques', 'audit', 'demandes-modification', 'profil',
   ],
   medecin_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'pharmacie', 'laboratoire', 'rapports', 'statistiques', 'profil',
+    'chambres', 'pharmacie', 'laboratoire', 'rapports', 'statistiques', 'demandes-modification', 'profil',
   ],
   medecin: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'laboratoire', 'profil',
+    'chambres', 'laboratoire', 'demandes-modification', 'profil',
   ],
   infirmier_chef: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'profil',
+    'chambres', 'demandes-modification', 'profil',
   ],
   infirmier: [
     'dashboard', 'patients', 'rendez-vous', 'consultations', 'hospitalisation',
-    'chambres', 'profil',
+    'chambres', 'demandes-modification', 'profil',
   ],
   technicien_labo: [
-    'dashboard', 'patients', 'laboratoire', 'profil',
+    'dashboard', 'patients', 'laboratoire', 'demandes-modification', 'profil',
   ],
   pharmacien: [
-    'dashboard', 'pharmacie', 'profil',
+    'dashboard', 'pharmacie', 'demandes-modification', 'profil',
   ],
   caissier: [
-    'dashboard', 'facturation', 'depenses', 'assurances', 'profil',
+    'dashboard', 'facturation', 'depenses', 'assurances', 'demandes-modification', 'profil',
   ],
   receptionniste: [
-    'dashboard', 'patients', 'rendez-vous', 'profil',
+    'dashboard', 'patients', 'rendez-vous', 'demandes-modification', 'profil',
   ],
 };
 

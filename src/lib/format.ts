@@ -108,7 +108,7 @@ export function downloadCsv(filename: string, headers: string[], rows: (string |
 // Libellés et couleurs des statuts
 // =====================================================
 
-type StatusStyle = { label: string; badge: string };
+export type StatusStyle = { label: string; badge: string };
 
 export const RDV_STATUTS: Record<string, StatusStyle> = {
   'planifié': { label: 'Planifié', badge: 'badge-info' },
@@ -228,6 +228,10 @@ export function explainDbError(error: { message?: string; code?: string } | null
   // Tables, vues ou fonctions du module Assurances absentes : script du module non exécuté
   if (/assur|bordereau|litige/i.test(msg) && (['42P01', '42703', 'PGRST200', 'PGRST202', 'PGRST204', 'PGRST205'].includes(error.code || '') || /does not exist|Could not find/i.test(msg))) {
     return "Le module Assurances nécessite la mise à jour de la base de données. Exécutez le script supabase/migrations/20261021_assurances.sql dans Supabase.";
+  }
+  // Table ou fonctions des demandes de modification absentes
+  if (/demande(s)?_modif/i.test(msg) && (['42P01', '42703', 'PGRST200', 'PGRST202', 'PGRST204', 'PGRST205'].includes(error.code || '') || /does not exist|Could not find/i.test(msg))) {
+    return "Les demandes de modification nécessitent la mise à jour de la base de données. Exécutez le script supabase/migrations/20261031_demandes_modification.sql dans Supabase.";
   }
   // Fonction de base de données absente : script de sécurité non exécuté
   if (error.code === 'PGRST202' || /Could not find the function/i.test(msg)) {

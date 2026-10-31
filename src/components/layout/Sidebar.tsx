@@ -27,6 +27,7 @@ import {
   FileSpreadsheet,
   Wallet,
   ShieldCheck,
+  FilePenLine,
 } from 'lucide-react';
 
 // =====================================================
@@ -55,6 +56,7 @@ const allNavItems: NavItemConfig[] = [
   { module: 'departements', label: 'Départements', href: '/departements', icon: <Building2 size={20} />, section: 'Administration' },
   { module: 'facturation', label: 'Facturation', href: '/facturation', icon: <Receipt size={20} />, section: 'Administration' },
   { module: 'depenses', label: 'Dépenses', href: '/depenses', icon: <Wallet size={20} />, section: 'Administration' },
+  { module: 'demandes-modification', label: 'Demandes de modification', href: '/demandes-modification', icon: <FilePenLine size={20} />, section: 'Qualité' },
   { module: 'rapports', label: 'Rapports', href: '/rapports', icon: <FileSpreadsheet size={20} />, section: 'Pilotage' },
   { module: 'statistiques', label: 'Statistiques', href: '/statistiques', icon: <BarChart3 size={20} />, section: 'Pilotage' },
   { module: 'audit', label: "Journal d'activité", href: '/audit', icon: <ScrollText size={20} />, section: 'Pilotage' },
